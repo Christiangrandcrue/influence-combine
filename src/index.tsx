@@ -18,6 +18,7 @@ import assistantRoutes from './routes/assistant';
 import videosRoutes from './routes/videos';
 import dashboardRoutes from './routes/dashboard';
 import libraryRoutes from './routes/library';
+import channelRoutes from './routes/channel';
 
 // Components
 import { renderApp } from './components/App';
@@ -56,6 +57,10 @@ app.route('/api/videos', videosRoutes);
 
 app.use('/api/dashboard/*', authMiddleware);
 app.route('/api/dashboard', dashboardRoutes);
+
+// Channel Analytics (auth required)
+app.use('/api/channel/*', authMiddleware);
+app.route('/api/channel', channelRoutes);
 
 // Health check
 app.get('/api/health', (c) => {
