@@ -169,6 +169,8 @@ function navigateTo(page) {
   });
   
   const pageTitles = {
+    channel: 'Мой канал',
+    predict: 'Прогноз виральности',
     dashboard: 'Dashboard',
     ideas: 'Генерация идей',
     videos: 'Анализ видео',
@@ -187,6 +189,12 @@ async function loadPageContent(page) {
   const container = document.getElementById('pageContent');
   
   switch (page) {
+    case 'channel':
+      await loadChannelPage();
+      break;
+    case 'predict':
+      await loadPredictPage();
+      break;
     case 'dashboard':
       await loadDashboard();
       break;
@@ -1036,13 +1044,805 @@ function scrollToFeatures() {
   document.getElementById('features')?.scrollIntoView({ behavior: 'smooth' });
 }
 
+// ============ CHANNEL PAGE ============
+let currentChannel = null;
+let channelAnalysis = null;
+
+async function loadChannelPage() {
+  const container = document.getElementById('pageContent');
+  
+  // Show loading
+  container.innerHTML = `
+    <div class="flex items-center justify-center py-20">
+      <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-500"></div>
+    </div>
+  `;
+  
+  try {
+    const result = await api('/channel');
+    const channels = result.channels || [];
+    
+    if (channels.length === 0) {
+      // Show connect form
+      container.innerHTML = renderConnectChannelForm();
+    } else {
+      currentChannel = channels[0];
+      container.innerHTML = renderChannelDashboard(currentChannel);
+      
+      // Load analysis if available
+      if (currentChannel.last_analysis) {
+        channelAnalysis = JSON.parse(currentChannel.last_analysis);
+        updateAnalysisUI(channelAnalysis);
+      }
+    }
+  } catch (error) {
+    container.innerHTML = `
+      <div class="text-center py-20">
+        <i class="fas fa-exclamation-triangle text-4xl text-red-400 mb-4"></i>
+        <p class="text-slate-400">Ошибка загрузки: ${error.message}</p>
+        <button onclick="loadChannelPage()" class="mt-4 px-4 py-2 rounded-lg bg-primary-500 text-white">
+          Попробовать снова
+        </button>
+      </div>
+    `;
+  }
+}
+
+function renderConnectChannelForm() {
+  return `
+    <div class="max-w-2xl mx-auto">
+      <!-- Hero -->
+      <div class="text-center mb-12">
+        <div class="w-20 h-20 rounded-2xl bg-gradient-to-br from-pink-500 to-purple-600 flex items-center justify-center mx-auto mb-6">
+          <i class="fab fa-instagram text-4xl text-white"></i>
+        </div>
+        <h2 class="text-3xl font-bold mb-3">Подключите Instagram</h2>
+        <p class="text-slate-400 text-lg">Введите @username и мы автоматически получим все данные вашего канала</p>
+      </div>
+      
+      <!-- Connect Form -->
+      <div class="p-8 rounded-2xl bg-slate-900/50 border border-white/10">
+        <form onsubmit="connectChannel(event)" class="space-y-6">
+          <div>
+            <label class="block text-sm font-medium text-slate-300 mb-2">Instagram Username</label>
+            <div class="relative">
+              <span class="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">@</span>
+              <input 
+                type="text" 
+                id="channelUsername"
+                placeholder="username"
+                class="w-full pl-10 pr-4 py-4 rounded-xl bg-slate-800 border border-white/10 focus:border-primary-500 focus:outline-none text-lg"
+                required
+              >
+            </div>
+          </div>
+          
+          <button type="submit" id="connectBtn" class="w-full py-4 rounded-xl gradient-bg text-white font-semibold text-lg hover:opacity-90 transition flex items-center justify-center space-x-2">
+            <i class="fas fa-plug"></i>
+            <span>Подключить канал</span>
+          </button>
+        </form>
+        
+        <div id="connectStatus" class="hidden mt-6 p-4 rounded-xl bg-primary-500/10 border border-primary-500/30">
+          <div class="flex items-center space-x-3">
+            <div class="animate-spin rounded-full h-5 w-5 border-b-2 border-primary-500"></div>
+            <span class="text-primary-400">Получаем данные из Instagram...</span>
+          </div>
+          <p class="text-sm text-slate-400 mt-2">Это может занять 10-30 секунд</p>
+        </div>
+        
+        <div id="connectError" class="hidden mt-6 p-4 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400">
+        </div>
+      </div>
+      
+      <!-- Features -->
+      <div class="grid grid-cols-3 gap-4 mt-8">
+        <div class="p-4 rounded-xl bg-slate-900/30 border border-white/5 text-center">
+          <i class="fas fa-users text-2xl text-primary-400 mb-2"></i>
+          <div class="text-sm text-slate-400">Подписчики</div>
+        </div>
+        <div class="p-4 rounded-xl bg-slate-900/30 border border-white/5 text-center">
+          <i class="fas fa-heart text-2xl text-red-400 mb-2"></i>
+          <div class="text-sm text-slate-400">Engagement</div>
+        </div>
+        <div class="p-4 rounded-xl bg-slate-900/30 border border-white/5 text-center">
+          <i class="fas fa-eye text-2xl text-accent-400 mb-2"></i>
+          <div class="text-sm text-slate-400">Просмотры</div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+async function connectChannel(e) {
+  e.preventDefault();
+  
+  const username = document.getElementById('channelUsername').value.trim();
+  const btn = document.getElementById('connectBtn');
+  const status = document.getElementById('connectStatus');
+  const error = document.getElementById('connectError');
+  
+  btn.disabled = true;
+  btn.innerHTML = '<div class="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>';
+  status.classList.remove('hidden');
+  error.classList.add('hidden');
+  
+  try {
+    const result = await api('/channel/connect', {
+      method: 'POST',
+      body: JSON.stringify({ username })
+    });
+    
+    currentChannel = result.channel;
+    
+    // Reload page with channel data
+    await loadChannelPage();
+    
+  } catch (err) {
+    error.textContent = err.message;
+    error.classList.remove('hidden');
+    status.classList.add('hidden');
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fas fa-plug"></i><span>Подключить канал</span>';
+  }
+}
+
+function renderChannelDashboard(channel) {
+  const hasAnalysis = !!channel.last_analysis;
+  
+  return `
+    <div class="space-y-6">
+      <!-- Profile Header -->
+      <div class="p-6 rounded-2xl bg-gradient-to-br from-pink-500/20 to-purple-600/20 border border-white/10">
+        <div class="flex items-start justify-between">
+          <div class="flex items-center space-x-4">
+            ${channel.profile_pic_url 
+              ? `<img src="${channel.profile_pic_url}" class="w-20 h-20 rounded-2xl object-cover" alt="${channel.username}">`
+              : `<div class="w-20 h-20 rounded-2xl bg-gradient-to-br from-pink-500 to-purple-600 flex items-center justify-center">
+                   <i class="fab fa-instagram text-3xl text-white"></i>
+                 </div>`
+            }
+            <div>
+              <div class="flex items-center space-x-2">
+                <h2 class="text-2xl font-bold">@${channel.username}</h2>
+                ${channel.is_verified ? '<i class="fas fa-check-circle text-blue-400"></i>' : ''}
+              </div>
+              <p class="text-slate-400 mt-1 max-w-md">${channel.bio || 'Без описания'}</p>
+            </div>
+          </div>
+          <button onclick="refreshChannel()" class="p-3 rounded-xl bg-white/10 hover:bg-white/20 transition" title="Обновить данные">
+            <i class="fas fa-sync-alt"></i>
+          </button>
+        </div>
+      </div>
+      
+      <!-- Stats Grid -->
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div class="p-5 rounded-2xl bg-slate-900/50 border border-white/10">
+          <div class="text-sm text-slate-400 mb-1">Подписчики</div>
+          <div class="text-3xl font-bold">${formatNumber(channel.followers)}</div>
+        </div>
+        <div class="p-5 rounded-2xl bg-slate-900/50 border border-white/10">
+          <div class="text-sm text-slate-400 mb-1">Подписки</div>
+          <div class="text-3xl font-bold">${formatNumber(channel.following)}</div>
+        </div>
+        <div class="p-5 rounded-2xl bg-slate-900/50 border border-white/10">
+          <div class="text-sm text-slate-400 mb-1">Публикаций</div>
+          <div class="text-3xl font-bold">${formatNumber(channel.posts_count)}</div>
+        </div>
+        <div class="p-5 rounded-2xl bg-slate-900/50 border border-white/10">
+          <div class="text-sm text-slate-400 mb-1">Engagement Rate</div>
+          <div class="text-3xl font-bold ${getERColor(channel.engagement_rate)}">${channel.engagement_rate?.toFixed(2) || '—'}%</div>
+        </div>
+      </div>
+      
+      <!-- Engagement Stats -->
+      <div class="grid grid-cols-3 gap-4">
+        <div class="p-5 rounded-2xl bg-slate-900/50 border border-white/10">
+          <div class="flex items-center space-x-2 text-red-400 mb-2">
+            <i class="fas fa-heart"></i>
+            <span class="text-sm">Средние лайки</span>
+          </div>
+          <div class="text-2xl font-bold">${formatNumber(channel.avg_likes)}</div>
+        </div>
+        <div class="p-5 rounded-2xl bg-slate-900/50 border border-white/10">
+          <div class="flex items-center space-x-2 text-blue-400 mb-2">
+            <i class="fas fa-comment"></i>
+            <span class="text-sm">Средние комментарии</span>
+          </div>
+          <div class="text-2xl font-bold">${formatNumber(channel.avg_comments)}</div>
+        </div>
+        <div class="p-5 rounded-2xl bg-slate-900/50 border border-white/10">
+          <div class="flex items-center space-x-2 text-purple-400 mb-2">
+            <i class="fas fa-eye"></i>
+            <span class="text-sm">Средние просмотры</span>
+          </div>
+          <div class="text-2xl font-bold">${formatNumber(channel.avg_views)}</div>
+        </div>
+      </div>
+      
+      <!-- Analysis Section -->
+      <div class="p-6 rounded-2xl bg-slate-900/50 border border-white/10">
+        <div class="flex items-center justify-between mb-6">
+          <h3 class="text-xl font-semibold">AI-анализ канала</h3>
+          <button onclick="analyzeChannel('${channel.id}')" id="analyzeBtn" class="px-5 py-2.5 rounded-xl gradient-bg text-white font-medium hover:opacity-90 transition flex items-center space-x-2">
+            <i class="fas fa-brain"></i>
+            <span>${hasAnalysis ? 'Обновить анализ' : 'Запустить анализ'}</span>
+          </button>
+        </div>
+        
+        <div id="analysisContent">
+          ${hasAnalysis ? '' : `
+            <div class="text-center py-12 text-slate-400">
+              <i class="fas fa-chart-pie text-5xl mb-4 opacity-50"></i>
+              <p>Запустите AI-анализ для получения рекомендаций</p>
+              <p class="text-sm mt-2">GPT-4o проанализирует ваш канал и даст персональные советы</p>
+            </div>
+          `}
+        </div>
+      </div>
+      
+      <!-- Quick Actions -->
+      <div class="grid grid-cols-2 gap-4">
+        <button onclick="navigateTo('predict')" class="p-6 rounded-2xl bg-gradient-to-br from-accent-500/20 to-primary-500/20 border border-white/10 hover:border-accent-500/50 transition text-left group">
+          <div class="w-12 h-12 rounded-xl bg-accent-500/20 flex items-center justify-center mb-4 group-hover:scale-110 transition">
+            <i class="fas fa-chart-line text-accent-400 text-xl"></i>
+          </div>
+          <h3 class="font-semibold mb-1">Прогноз виральности</h3>
+          <p class="text-sm text-slate-400">Узнайте сколько просмотров наберёт ваш Reels</p>
+        </button>
+        
+        <button onclick="getChannelSuggestions('${channel.id}')" class="p-6 rounded-2xl bg-slate-900/50 border border-white/10 hover:border-green-500/50 transition text-left group">
+          <div class="w-12 h-12 rounded-xl bg-green-500/20 flex items-center justify-center mb-4 group-hover:scale-110 transition">
+            <i class="fas fa-lightbulb text-green-400 text-xl"></i>
+          </div>
+          <h3 class="font-semibold mb-1">Идеи для контента</h3>
+          <p class="text-sm text-slate-400">AI сгенерирует идеи специально для вашего канала</p>
+        </button>
+      </div>
+    </div>
+  `;
+}
+
+async function analyzeChannel(channelId) {
+  const btn = document.getElementById('analyzeBtn');
+  const content = document.getElementById('analysisContent');
+  
+  btn.disabled = true;
+  btn.innerHTML = '<div class="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div> Анализируем...';
+  
+  content.innerHTML = `
+    <div class="flex items-center justify-center py-12">
+      <div class="text-center">
+        <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-500 mx-auto mb-4"></div>
+        <p class="text-slate-400">GPT-4o анализирует ваш канал...</p>
+        <p class="text-sm text-slate-500 mt-2">Это займёт 5-10 секунд</p>
+      </div>
+    </div>
+  `;
+  
+  try {
+    const result = await api(`/channel/${channelId}/analyze`, { method: 'POST' });
+    channelAnalysis = result.analysis;
+    updateAnalysisUI(channelAnalysis);
+    
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fas fa-brain mr-2"></i> Обновить анализ';
+  } catch (error) {
+    content.innerHTML = `
+      <div class="text-center py-8 text-red-400">
+        <i class="fas fa-exclamation-triangle text-3xl mb-3"></i>
+        <p>Ошибка анализа: ${error.message}</p>
+      </div>
+    `;
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fas fa-brain mr-2"></i> Повторить анализ';
+  }
+}
+
+function updateAnalysisUI(analysis) {
+  const content = document.getElementById('analysisContent');
+  
+  content.innerHTML = `
+    <!-- Health Score -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+      <div class="p-5 rounded-xl bg-slate-800/50 text-center">
+        <div class="text-sm text-slate-400 mb-2">Health Score</div>
+        <div class="text-4xl font-bold ${getScoreColor(analysis.health_score)}">${analysis.health_score}</div>
+        <div class="text-xs text-slate-500 mt-1">из 100</div>
+      </div>
+      <div class="p-5 rounded-xl bg-slate-800/50 text-center">
+        <div class="text-sm text-slate-400 mb-2">Потенциал роста</div>
+        <div class="text-4xl font-bold text-accent-400">${analysis.growth_potential_score || '—'}</div>
+        <div class="text-xs text-slate-500 mt-1">${analysis.growth_potential || ''}</div>
+      </div>
+      <div class="p-5 rounded-xl bg-slate-800/50 text-center">
+        <div class="text-sm text-slate-400 mb-2">Качество контента</div>
+        <div class="text-4xl font-bold text-primary-400">${analysis.content_quality_score || '—'}</div>
+        <div class="text-xs text-slate-500 mt-1">из 100</div>
+      </div>
+    </div>
+    
+    <!-- SWOT -->
+    <div class="grid grid-cols-2 gap-4 mb-6">
+      <div class="p-4 rounded-xl bg-green-500/10 border border-green-500/30">
+        <div class="font-medium text-green-400 mb-3"><i class="fas fa-plus-circle mr-2"></i>Сильные стороны</div>
+        <ul class="space-y-2">
+          ${(analysis.strengths || []).map(s => `<li class="text-sm text-slate-300 flex items-start"><i class="fas fa-check text-green-400 mr-2 mt-1 text-xs"></i>${s}</li>`).join('')}
+        </ul>
+      </div>
+      <div class="p-4 rounded-xl bg-red-500/10 border border-red-500/30">
+        <div class="font-medium text-red-400 mb-3"><i class="fas fa-minus-circle mr-2"></i>Слабые стороны</div>
+        <ul class="space-y-2">
+          ${(analysis.weaknesses || []).map(w => `<li class="text-sm text-slate-300 flex items-start"><i class="fas fa-exclamation text-red-400 mr-2 mt-1 text-xs"></i>${w}</li>`).join('')}
+        </ul>
+      </div>
+      <div class="p-4 rounded-xl bg-blue-500/10 border border-blue-500/30">
+        <div class="font-medium text-blue-400 mb-3"><i class="fas fa-arrow-up mr-2"></i>Возможности</div>
+        <ul class="space-y-2">
+          ${(analysis.opportunities || []).map(o => `<li class="text-sm text-slate-300 flex items-start"><i class="fas fa-lightbulb text-blue-400 mr-2 mt-1 text-xs"></i>${o}</li>`).join('')}
+        </ul>
+      </div>
+      <div class="p-4 rounded-xl bg-yellow-500/10 border border-yellow-500/30">
+        <div class="font-medium text-yellow-400 mb-3"><i class="fas fa-exclamation-triangle mr-2"></i>Угрозы</div>
+        <ul class="space-y-2">
+          ${(analysis.threats || []).map(t => `<li class="text-sm text-slate-300 flex items-start"><i class="fas fa-shield-alt text-yellow-400 mr-2 mt-1 text-xs"></i>${t}</li>`).join('')}
+        </ul>
+      </div>
+    </div>
+    
+    <!-- Recommendations -->
+    <div class="mb-6">
+      <h4 class="font-medium mb-4"><i class="fas fa-tasks mr-2 text-primary-400"></i>Рекомендации</h4>
+      <div class="space-y-3">
+        ${(analysis.recommendations || []).map(r => `
+          <div class="p-4 rounded-xl bg-slate-800/50 border-l-4 ${r.priority === 'high' ? 'border-red-500' : r.priority === 'medium' ? 'border-yellow-500' : 'border-slate-500'}">
+            <div class="flex items-center justify-between mb-2">
+              <span class="font-medium">${r.title}</span>
+              <span class="text-xs px-2 py-1 rounded-full ${r.priority === 'high' ? 'bg-red-500/20 text-red-400' : r.priority === 'medium' ? 'bg-yellow-500/20 text-yellow-400' : 'bg-slate-500/20 text-slate-400'}">${r.priority}</span>
+            </div>
+            <p class="text-sm text-slate-400">${r.description}</p>
+            <p class="text-xs text-accent-400 mt-2"><i class="fas fa-chart-line mr-1"></i>${r.expected_impact}</p>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+    
+    <!-- Additional Info -->
+    <div class="grid grid-cols-2 gap-4">
+      <div class="p-4 rounded-xl bg-slate-800/50">
+        <div class="text-sm text-slate-400 mb-2"><i class="fas fa-clock mr-2"></i>Лучшее время для постинга</div>
+        <div class="flex flex-wrap gap-2">
+          ${(analysis.best_posting_times || []).map(t => `<span class="px-3 py-1 rounded-full bg-primary-500/20 text-primary-400 text-sm">${t}</span>`).join('')}
+        </div>
+      </div>
+      <div class="p-4 rounded-xl bg-slate-800/50">
+        <div class="text-sm text-slate-400 mb-2"><i class="fas fa-pie-chart mr-2"></i>Микс контента</div>
+        <div class="space-y-2">
+          ${(analysis.content_mix_suggestion || []).map(m => `
+            <div class="flex items-center justify-between">
+              <span class="text-sm">${m.type}</span>
+              <div class="flex items-center">
+                <div class="w-20 h-2 bg-slate-700 rounded-full overflow-hidden mr-2">
+                  <div class="h-full gradient-bg" style="width: ${m.percentage}%"></div>
+                </div>
+                <span class="text-sm text-slate-400">${m.percentage}%</span>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+async function getChannelSuggestions(channelId) {
+  try {
+    const result = await api(`/channel/${channelId}/suggestions`);
+    showSuggestionsModal(result);
+  } catch (error) {
+    alert('Ошибка: ' + error.message);
+  }
+}
+
+function showSuggestionsModal(data) {
+  const modal = document.createElement('div');
+  modal.className = 'fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm';
+  modal.innerHTML = `
+    <div class="bg-slate-900 rounded-2xl p-6 w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto border border-white/10">
+      <div class="flex items-center justify-between mb-6">
+        <h2 class="text-xl font-bold"><i class="fas fa-lightbulb text-yellow-400 mr-2"></i>Идеи для вашего канала</h2>
+        <button onclick="this.closest('.fixed').remove()" class="p-2 rounded-lg hover:bg-white/10 transition">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+      
+      <div class="space-y-4">
+        ${(data.suggestions || []).map((s, i) => `
+          <div class="p-4 rounded-xl bg-slate-800/50 border border-white/10 hover:border-accent-500/50 transition">
+            <div class="flex items-start justify-between mb-2">
+              <span class="text-xs px-2 py-1 rounded-full bg-accent-500/20 text-accent-400">#${i + 1}</span>
+              <span class="text-xs px-2 py-1 rounded-full ${s.difficulty === 'easy' ? 'bg-green-500/20 text-green-400' : s.difficulty === 'medium' ? 'bg-yellow-500/20 text-yellow-400' : 'bg-red-500/20 text-red-400'}">${s.difficulty}</span>
+            </div>
+            <h3 class="font-semibold mb-2">${s.title}</h3>
+            <p class="text-sm text-accent-400 mb-2">🎬 "${s.hook}"</p>
+            <p class="text-sm text-slate-400 mb-3">${s.why_viral}</p>
+            <div class="flex items-center justify-between text-xs text-slate-500">
+              <span><i class="fas fa-fire mr-1 text-orange-400"></i>Виральность: ${s.estimated_virality}/100</span>
+              <button onclick="useIdeaForPredict('${encodeURIComponent(s.title)}', '${encodeURIComponent(s.hook)}')" class="text-primary-400 hover:text-primary-300">
+                Прогноз <i class="fas fa-arrow-right ml-1"></i>
+              </button>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+      
+      ${data.trending_topics ? `
+        <div class="mt-6 p-4 rounded-xl bg-slate-800/50">
+          <div class="text-sm text-slate-400 mb-2"><i class="fas fa-fire mr-2 text-orange-400"></i>Трендовые темы</div>
+          <div class="flex flex-wrap gap-2">
+            ${data.trending_topics.map(t => `<span class="px-3 py-1 rounded-full bg-orange-500/20 text-orange-400 text-sm">${t}</span>`).join('')}
+          </div>
+        </div>
+      ` : ''}
+    </div>
+  `;
+  document.body.appendChild(modal);
+}
+
+function useIdeaForPredict(title, hook) {
+  document.querySelector('.fixed')?.remove();
+  navigateTo('predict');
+  
+  setTimeout(() => {
+    const titleInput = document.getElementById('predictTitle');
+    const hookInput = document.getElementById('predictHook');
+    if (titleInput) titleInput.value = decodeURIComponent(title);
+    if (hookInput) hookInput.value = decodeURIComponent(hook);
+  }, 100);
+}
+
+async function refreshChannel() {
+  if (currentChannel) {
+    await loadChannelPage();
+  }
+}
+
+// ============ PREDICT PAGE ============
+async function loadPredictPage() {
+  const container = document.getElementById('pageContent');
+  
+  // Check if channel connected
+  try {
+    const result = await api('/channel');
+    const channels = result.channels || [];
+    
+    if (channels.length === 0) {
+      container.innerHTML = `
+        <div class="text-center py-20">
+          <div class="w-20 h-20 rounded-2xl bg-accent-500/20 flex items-center justify-center mx-auto mb-6">
+            <i class="fas fa-chart-line text-4xl text-accent-400"></i>
+          </div>
+          <h2 class="text-2xl font-bold mb-3">Сначала подключите канал</h2>
+          <p class="text-slate-400 mb-6">Для прогноза виральности нужны данные вашего Instagram</p>
+          <button onclick="navigateTo('channel')" class="px-6 py-3 rounded-xl gradient-bg text-white font-medium hover:opacity-90 transition">
+            <i class="fab fa-instagram mr-2"></i>Подключить Instagram
+          </button>
+        </div>
+      `;
+      return;
+    }
+    
+    currentChannel = channels[0];
+    container.innerHTML = renderPredictPage(currentChannel);
+    
+  } catch (error) {
+    container.innerHTML = `<div class="text-center py-20 text-red-400">Ошибка: ${error.message}</div>`;
+  }
+}
+
+function renderPredictPage(channel) {
+  return `
+    <div class="max-w-4xl mx-auto space-y-6">
+      <!-- Header -->
+      <div class="p-6 rounded-2xl bg-gradient-to-br from-accent-500/20 to-primary-500/20 border border-white/10">
+        <div class="flex items-center space-x-4 mb-4">
+          <div class="w-14 h-14 rounded-xl gradient-bg flex items-center justify-center">
+            <i class="fas fa-crystal-ball text-2xl text-white"></i>
+          </div>
+          <div>
+            <h2 class="text-2xl font-bold">Прогноз виральности</h2>
+            <p class="text-slate-400">Узнайте сколько просмотров наберёт ваш Reels до публикации</p>
+          </div>
+        </div>
+        <div class="flex items-center text-sm text-slate-400">
+          <i class="fab fa-instagram mr-2"></i>
+          Прогноз для @${channel.username} (${formatNumber(channel.followers)} подписчиков)
+        </div>
+      </div>
+      
+      <!-- Prediction Form -->
+      <form onsubmit="runPrediction(event, '${channel.id}')" class="p-6 rounded-2xl bg-slate-900/50 border border-white/10 space-y-5">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+          <div>
+            <label class="block text-sm font-medium text-slate-300 mb-2">Название / Тема видео</label>
+            <input 
+              type="text" 
+              id="predictTitle"
+              placeholder="О чём будет видео?"
+              class="w-full px-4 py-3 rounded-xl bg-slate-800 border border-white/10 focus:border-primary-500 focus:outline-none"
+              required
+            >
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-slate-300 mb-2">Тема / Ниша</label>
+            <input 
+              type="text" 
+              id="predictTopic"
+              placeholder="Например: продуктивность, бизнес, лайфстайл"
+              class="w-full px-4 py-3 rounded-xl bg-slate-800 border border-white/10 focus:border-primary-500 focus:outline-none"
+              required
+            >
+          </div>
+        </div>
+        
+        <div>
+          <label class="block text-sm font-medium text-slate-300 mb-2">
+            Хук (первые 3 секунды) 
+            <span class="text-slate-500">— самое важное!</span>
+          </label>
+          <textarea 
+            id="predictHook"
+            rows="2"
+            placeholder="Первая фраза или сцена, которая остановит скролл"
+            class="w-full px-4 py-3 rounded-xl bg-slate-800 border border-white/10 focus:border-primary-500 focus:outline-none resize-none"
+            required
+          ></textarea>
+        </div>
+        
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div>
+            <label class="block text-sm font-medium text-slate-300 mb-2">Длительность</label>
+            <select id="predictDuration" class="w-full px-4 py-3 rounded-xl bg-slate-800 border border-white/10 focus:border-primary-500 focus:outline-none">
+              <option value="15">15 сек</option>
+              <option value="30" selected>30 сек</option>
+              <option value="45">45 сек</option>
+              <option value="60">60 сек</option>
+              <option value="90">90 сек</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-slate-300 mb-2">Структура</label>
+            <select id="predictStructure" class="w-full px-4 py-3 rounded-xl bg-slate-800 border border-white/10 focus:border-primary-500 focus:outline-none">
+              <option value="hook-content-cta">Hook → Content → CTA</option>
+              <option value="transformation">Трансформация</option>
+              <option value="storytelling">Сторителлинг</option>
+              <option value="listicle">Список</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-slate-300 mb-2">Эмоция</label>
+            <select id="predictEmotion" class="w-full px-4 py-3 rounded-xl bg-slate-800 border border-white/10 focus:border-primary-500 focus:outline-none">
+              <option value="curiosity">Любопытство</option>
+              <option value="surprise">Удивление</option>
+              <option value="inspiration">Вдохновение</option>
+              <option value="humor">Юмор</option>
+              <option value="fear">Страх упустить</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-slate-300 mb-2">CTA</label>
+            <select id="predictCTA" class="w-full px-4 py-3 rounded-xl bg-slate-800 border border-white/10 focus:border-primary-500 focus:outline-none">
+              <option value="comment">Комментарий</option>
+              <option value="follow">Подписка</option>
+              <option value="save">Сохранить</option>
+              <option value="share">Поделиться</option>
+              <option value="none">Без CTA</option>
+            </select>
+          </div>
+        </div>
+        
+        <button type="submit" id="predictBtn" class="w-full py-4 rounded-xl gradient-bg text-white font-semibold text-lg hover:opacity-90 transition flex items-center justify-center space-x-2">
+          <i class="fas fa-magic"></i>
+          <span>Получить прогноз</span>
+        </button>
+      </form>
+      
+      <!-- Prediction Results -->
+      <div id="predictionResults"></div>
+    </div>
+  `;
+}
+
+async function runPrediction(e, channelId) {
+  e.preventDefault();
+  
+  const btn = document.getElementById('predictBtn');
+  const results = document.getElementById('predictionResults');
+  
+  const data = {
+    title: document.getElementById('predictTitle').value,
+    topic: document.getElementById('predictTopic').value,
+    hook: document.getElementById('predictHook').value,
+    duration: parseInt(document.getElementById('predictDuration').value),
+    structure: document.getElementById('predictStructure').value,
+    target_emotion: document.getElementById('predictEmotion').value,
+    call_to_action: document.getElementById('predictCTA').value
+  };
+  
+  btn.disabled = true;
+  btn.innerHTML = '<div class="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div> AI анализирует...';
+  
+  results.innerHTML = `
+    <div class="p-8 rounded-2xl bg-slate-900/50 border border-white/10">
+      <div class="flex items-center justify-center">
+        <div class="text-center">
+          <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-accent-500 mx-auto mb-4"></div>
+          <p class="text-slate-400">GPT-4o прогнозирует метрики...</p>
+        </div>
+      </div>
+    </div>
+  `;
+  
+  try {
+    const result = await api(`/channel/${channelId}/predict`, {
+      method: 'POST',
+      body: JSON.stringify(data)
+    });
+    
+    renderPredictionResults(result.prediction);
+    
+  } catch (error) {
+    results.innerHTML = `
+      <div class="p-6 rounded-2xl bg-red-500/10 border border-red-500/30 text-red-400 text-center">
+        <i class="fas fa-exclamation-triangle text-3xl mb-3"></i>
+        <p>Ошибка прогнозирования: ${error.message}</p>
+      </div>
+    `;
+  }
+  
+  btn.disabled = false;
+  btn.innerHTML = '<i class="fas fa-magic mr-2"></i> Получить новый прогноз';
+}
+
+function renderPredictionResults(pred) {
+  const results = document.getElementById('predictionResults');
+  
+  results.innerHTML = `
+    <div class="space-y-6">
+      <!-- Main Score -->
+      <div class="p-6 rounded-2xl bg-gradient-to-br from-accent-500/20 to-primary-500/20 border border-white/10">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div class="text-center">
+            <div class="text-6xl font-bold ${getScoreColor(pred.virality_score)}">${pred.virality_score}</div>
+            <div class="text-slate-400 mt-2">Virality Score</div>
+            <div class="text-sm text-slate-500">из 100</div>
+          </div>
+          <div class="text-center">
+            <div class="text-4xl font-bold text-primary-400">${formatNumber(pred.predicted_views?.likely)}</div>
+            <div class="text-slate-400 mt-2">Ожидаемые просмотры</div>
+            <div class="text-sm text-slate-500">${formatNumber(pred.predicted_views?.min)} — ${formatNumber(pred.predicted_views?.max)}</div>
+          </div>
+          <div class="text-center">
+            <div class="text-4xl font-bold ${pred.viral_probability > 0.3 ? 'text-green-400' : pred.viral_probability > 0.1 ? 'text-yellow-400' : 'text-slate-400'}">${Math.round(pred.viral_probability * 100)}%</div>
+            <div class="text-slate-400 mt-2">Шанс вирусности</div>
+            <div class="text-sm text-slate-500">${pred.viral_threshold_note || ''}</div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Predicted Metrics -->
+      <div class="grid grid-cols-3 gap-4">
+        <div class="p-4 rounded-xl bg-slate-900/50 border border-white/10 text-center">
+          <i class="fas fa-heart text-red-400 text-xl mb-2"></i>
+          <div class="text-2xl font-bold">${formatNumber(pred.predicted_likes?.likely)}</div>
+          <div class="text-xs text-slate-400">Лайков</div>
+        </div>
+        <div class="p-4 rounded-xl bg-slate-900/50 border border-white/10 text-center">
+          <i class="fas fa-comment text-blue-400 text-xl mb-2"></i>
+          <div class="text-2xl font-bold">${formatNumber(pred.predicted_comments?.likely)}</div>
+          <div class="text-xs text-slate-400">Комментариев</div>
+        </div>
+        <div class="p-4 rounded-xl bg-slate-900/50 border border-white/10 text-center">
+          <i class="fas fa-share text-green-400 text-xl mb-2"></i>
+          <div class="text-2xl font-bold">${formatNumber(pred.predicted_shares?.likely)}</div>
+          <div class="text-xs text-slate-400">Репостов</div>
+        </div>
+      </div>
+      
+      <!-- Hook Analysis -->
+      ${pred.hook_analysis ? `
+        <div class="p-5 rounded-xl bg-slate-900/50 border border-white/10">
+          <h4 class="font-medium mb-4"><i class="fas fa-bullseye mr-2 text-primary-400"></i>Анализ хука</h4>
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+            <div class="text-center">
+              <div class="text-2xl font-bold ${getScoreColor(pred.hook_analysis.score * 10)}">${pred.hook_analysis.score}/10</div>
+              <div class="text-xs text-slate-400">Оценка</div>
+            </div>
+            <div class="text-center">
+              <div class="text-2xl ${pred.hook_analysis.stops_scroll ? 'text-green-400' : 'text-red-400'}">${pred.hook_analysis.stops_scroll ? '✓' : '✗'}</div>
+              <div class="text-xs text-slate-400">Остановит скролл</div>
+            </div>
+            <div class="text-center">
+              <div class="text-2xl ${pred.hook_analysis.curiosity_gap ? 'text-green-400' : 'text-red-400'}">${pred.hook_analysis.curiosity_gap ? '✓' : '✗'}</div>
+              <div class="text-xs text-slate-400">Curiosity Gap</div>
+            </div>
+            <div class="text-center">
+              <div class="text-lg text-accent-400">${pred.hook_analysis.emotional_trigger || '—'}</div>
+              <div class="text-xs text-slate-400">Эмоция</div>
+            </div>
+          </div>
+          ${pred.hook_analysis.improvement ? `
+            <div class="p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/30 text-sm">
+              <i class="fas fa-lightbulb text-yellow-400 mr-2"></i>
+              ${pred.hook_analysis.improvement}
+            </div>
+          ` : ''}
+        </div>
+      ` : ''}
+      
+      <!-- Improvements -->
+      ${pred.improvements?.length ? `
+        <div class="p-5 rounded-xl bg-slate-900/50 border border-white/10">
+          <h4 class="font-medium mb-4"><i class="fas fa-arrow-up mr-2 text-green-400"></i>Как улучшить</h4>
+          <div class="space-y-3">
+            ${pred.improvements.map(imp => `
+              <div class="flex items-center justify-between p-3 rounded-lg bg-slate-800/50">
+                <div class="flex items-center space-x-3">
+                  <span class="px-2 py-1 rounded text-xs ${imp.impact === 'high' ? 'bg-green-500/20 text-green-400' : imp.impact === 'medium' ? 'bg-yellow-500/20 text-yellow-400' : 'bg-slate-500/20 text-slate-400'}">${imp.impact}</span>
+                  <div>
+                    <div class="font-medium text-sm">${imp.area}</div>
+                    <div class="text-xs text-slate-400">${imp.action}</div>
+                  </div>
+                </div>
+                <div class="text-right">
+                  <div class="text-sm">${imp.current_score} → <span class="text-green-400">${imp.potential_score}</span></div>
+                  <div class="text-xs text-slate-500">${imp.effort}</div>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      ` : ''}
+      
+      <!-- Best Time & Verdict -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="p-5 rounded-xl bg-slate-900/50 border border-white/10">
+          <h4 class="font-medium mb-3"><i class="fas fa-clock mr-2 text-primary-400"></i>Лучшее время публикации</h4>
+          <div class="text-lg text-primary-400">${pred.best_posting_time || 'Вечер (18:00-21:00)'}</div>
+        </div>
+        <div class="p-5 rounded-xl bg-gradient-to-br from-accent-500/10 to-primary-500/10 border border-accent-500/30">
+          <h4 class="font-medium mb-3"><i class="fas fa-gavel mr-2 text-accent-400"></i>Вердикт</h4>
+          <p class="text-sm text-slate-300">${pred.overall_verdict || 'Видео имеет хороший потенциал'}</p>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+// ============ HELPER FUNCTIONS ============
+function formatNumber(num) {
+  if (!num) return '0';
+  if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
+  if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
+  return num.toString();
+}
+
+function getERColor(er) {
+  if (!er) return 'text-slate-400';
+  if (er >= 3) return 'text-green-400';
+  if (er >= 1.5) return 'text-yellow-400';
+  return 'text-red-400';
+}
+
 // ============ INIT ============
 document.addEventListener('DOMContentLoaded', () => {
   // Initialize based on state
   if (window.APP_STATE?.needsOnboarding) {
     initOnboarding();
   } else if (window.APP_STATE?.isAuthenticated) {
-    loadDashboard();
+    // Default to channel page
+    navigateTo('channel');
   }
   
   // Close user menu on outside click

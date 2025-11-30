@@ -518,9 +518,13 @@ function renderDashboard(user: User): string {
       </div>
       
       <nav class="space-y-1">
-        <a href="#" onclick="navigateTo('dashboard')" class="nav-item flex items-center space-x-3 px-4 py-3 rounded-xl bg-primary-500/20 text-primary-400">
-          <i class="fas fa-home w-5"></i>
-          <span>Dashboard</span>
+        <a href="#" onclick="navigateTo('channel')" class="nav-item flex items-center space-x-3 px-4 py-3 rounded-xl bg-primary-500/20 text-primary-400">
+          <i class="fab fa-instagram w-5"></i>
+          <span>Мой канал</span>
+        </a>
+        <a href="#" onclick="navigateTo('predict')" class="nav-item flex items-center space-x-3 px-4 py-3 rounded-xl text-slate-400 hover:bg-white/5 hover:text-white transition">
+          <i class="fas fa-chart-line w-5"></i>
+          <span>Прогноз</span>
         </a>
         <a href="#" onclick="navigateTo('ideas')" class="nav-item flex items-center space-x-3 px-4 py-3 rounded-xl text-slate-400 hover:bg-white/5 hover:text-white transition">
           <i class="fas fa-lightbulb w-5"></i>
@@ -712,25 +716,21 @@ function renderDashboard(user: User): string {
     <!-- Mobile Navigation -->
     <nav class="fixed bottom-0 left-0 right-0 bg-slate-900 border-t border-white/10 lg:hidden z-50">
       <div class="flex items-center justify-around py-2">
-        <button onclick="navigateTo('dashboard')" class="flex flex-col items-center p-2 text-primary-400">
-          <i class="fas fa-home text-xl"></i>
-          <span class="text-xs mt-1">Home</span>
+        <button onclick="navigateTo('channel')" class="flex flex-col items-center p-2 text-primary-400">
+          <i class="fab fa-instagram text-xl"></i>
+          <span class="text-xs mt-1">Канал</span>
+        </button>
+        <button onclick="navigateTo('predict')" class="flex flex-col items-center p-2 text-slate-400">
+          <i class="fas fa-chart-line text-xl"></i>
+          <span class="text-xs mt-1">Прогноз</span>
         </button>
         <button onclick="navigateTo('ideas')" class="flex flex-col items-center p-2 text-slate-400">
           <i class="fas fa-lightbulb text-xl"></i>
           <span class="text-xs mt-1">Идеи</span>
         </button>
-        <button onclick="navigateTo('videos')" class="flex flex-col items-center p-2 text-slate-400">
-          <i class="fas fa-video text-xl"></i>
-          <span class="text-xs mt-1">Видео</span>
-        </button>
         <button onclick="navigateTo('assistant')" class="flex flex-col items-center p-2 text-slate-400">
           <i class="fas fa-robot text-xl"></i>
           <span class="text-xs mt-1">AI</span>
-        </button>
-        <button onclick="navigateTo('library')" class="flex flex-col items-center p-2 text-slate-400">
-          <i class="fas fa-book text-xl"></i>
-          <span class="text-xs mt-1">База</span>
         </button>
       </div>
     </nav>
