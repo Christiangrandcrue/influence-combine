@@ -217,6 +217,7 @@ export interface Bindings {
   DB: D1Database;
   OPENAI_API_KEY?: string;
   SENDGRID_API_KEY?: string;
+  APIFY_API_TOKEN?: string;
   JWT_SECRET?: string;
   APP_NAME: string;
   APP_VERSION: string;

@@ -4,6 +4,7 @@
 import { Hono } from 'hono';
 import type { Bindings, Variables } from '../types';
 import { chatCompletion } from '../lib/openai';
+import { scrapeInstagramProfile } from '../lib/apify';
 
 const channel = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
@@ -83,7 +84,7 @@ interface ChannelAnalysis {
   }[];
 }
 
-// Connect/Add Instagram channel
+// Connect/Add Instagram channel - AUTO SCRAPE with Apify
 channel.post('/connect', async (c) => {
   try {
     const user = c.get('user');
@@ -93,7 +94,8 @@ channel.post('/connect', async (c) => {
 
     const body = await c.req.json<{
       username: string;
-      // Optional: user can provide their stats manually
+      // Optional: skip auto-scrape and use manual stats
+      skip_scrape?: boolean;
       manual_stats?: {
         followers?: number;
         avg_views?: number;
@@ -104,7 +106,7 @@ channel.post('/connect', async (c) => {
       };
     }>();
 
-    const { username, manual_stats } = body;
+    const { username, skip_scrape, manual_stats } = body;
 
     if (!username) {
       return c.json({ success: false, error: 'Username обязателен' }, 400);
@@ -112,44 +114,152 @@ channel.post('/connect', async (c) => {
 
     // Clean username
     const cleanUsername = username.replace('@', '').trim().toLowerCase();
-
-    // Save channel to database
     const channelId = crypto.randomUUID();
     
+    // Check if Apify token is available and scraping not skipped
+    const apifyToken = c.env.APIFY_API_TOKEN;
+    let scrapedData = null;
+    let scrapeError = null;
+
+    if (apifyToken && !skip_scrape) {
+      try {
+        console.log(`[Channel] Auto-scraping @${cleanUsername} via Apify...`);
+        scrapedData = await scrapeInstagramProfile(apifyToken, cleanUsername);
+        console.log(`[Channel] Scraped: ${scrapedData.followers} followers, ER: ${scrapedData.engagementRate}%`);
+      } catch (err: any) {
+        console.error('[Channel] Scrape failed:', err.message);
+        scrapeError = err.message;
+      }
+    }
+
+    // Use scraped data or manual stats
+    const channelData = scrapedData ? {
+      followers: scrapedData.followers,
+      following: scrapedData.following,
+      posts_count: scrapedData.postsCount,
+      avg_views: scrapedData.avgViews || null,
+      avg_likes: scrapedData.avgLikes,
+      avg_comments: scrapedData.avgComments,
+      engagement_rate: scrapedData.engagementRate,
+      bio: scrapedData.bio,
+      profile_pic_url: scrapedData.profilePicUrl,
+      is_verified: scrapedData.isVerified ? 1 : 0,
+      is_business: scrapedData.isBusiness ? 1 : 0,
+      full_name: scrapedData.fullName,
+      external_url: scrapedData.externalUrl,
+      recent_posts: JSON.stringify(scrapedData.recentPosts),
+      status: 'active',
+      connection_type: 'apify',
+    } : {
+      followers: manual_stats?.followers || null,
+      following: null,
+      posts_count: manual_stats?.posts_count || null,
+      avg_views: manual_stats?.avg_views || null,
+      avg_likes: manual_stats?.avg_likes || null,
+      avg_comments: manual_stats?.avg_comments || null,
+      engagement_rate: null,
+      bio: null,
+      profile_pic_url: null,
+      is_verified: 0,
+      is_business: 0,
+      full_name: null,
+      external_url: null,
+      recent_posts: null,
+      status: 'pending',
+      connection_type: 'manual',
+    };
+
+    // Save to database
     await c.env.DB.prepare(`
-      INSERT INTO channels (id, user_id, username, followers, avg_views, avg_likes, avg_comments, posts_count, niche, status, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', datetime('now'))
+      INSERT INTO channels (
+        id, user_id, username, followers, following, posts_count, 
+        avg_views, avg_likes, avg_comments, engagement_rate,
+        bio, profile_pic_url, is_verified, is_business,
+        niche, status, connection_type, created_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
     `).bind(
       channelId,
       user.id,
       cleanUsername,
-      manual_stats?.followers || null,
-      manual_stats?.avg_views || null,
-      manual_stats?.avg_likes || null,
-      manual_stats?.avg_comments || null,
-      manual_stats?.posts_count || null,
-      manual_stats?.niche || null
+      channelData.followers,
+      channelData.following,
+      channelData.posts_count,
+      channelData.avg_views,
+      channelData.avg_likes,
+      channelData.avg_comments,
+      channelData.engagement_rate,
+      channelData.bio,
+      channelData.profile_pic_url,
+      channelData.is_verified,
+      channelData.is_business,
+      manual_stats?.niche || null,
+      channelData.status,
+      channelData.connection_type
     ).run();
 
-    // Update user's connected channel (optional - column may not exist)
-    try {
-      await c.env.DB.prepare(`
-        UPDATE users SET instagram_username = ?, updated_at = datetime('now') WHERE id = ?
-      `).bind(cleanUsername, user.id).run();
-    } catch (e) {
-      // Column might not exist in older schema - that's ok
-      console.log('Note: instagram_username column not in users table');
+    // Save recent posts to reels table if available
+    if (scrapedData?.recentPosts) {
+      for (const post of scrapedData.recentPosts.slice(0, 12)) {
+        try {
+          await c.env.DB.prepare(`
+            INSERT INTO reels (id, channel_id, caption, hashtags, views, likes, comments, posted_at, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+          `).bind(
+            crypto.randomUUID(),
+            channelId,
+            post.caption?.substring(0, 500) || null,
+            JSON.stringify(post.hashtags || []),
+            post.views || null,
+            post.likes,
+            post.comments,
+            post.timestamp || null
+          ).run();
+        } catch (e) {
+          // Ignore individual post save errors
+        }
+      }
     }
 
-    return c.json({
+    // Build response
+    const response: any = {
       success: true,
       channel: {
         id: channelId,
         username: cleanUsername,
-        status: 'pending',
-        message: 'Канал добавлен. Для полного анализа заполните статистику вручную или подключите Instagram API.'
+        status: channelData.status,
+        connection_type: channelData.connection_type,
       }
-    });
+    };
+
+    if (scrapedData) {
+      response.channel = {
+        ...response.channel,
+        fullName: scrapedData.fullName,
+        bio: scrapedData.bio,
+        profilePicUrl: scrapedData.profilePicUrl,
+        followers: scrapedData.followers,
+        following: scrapedData.following,
+        postsCount: scrapedData.postsCount,
+        avgLikes: scrapedData.avgLikes,
+        avgComments: scrapedData.avgComments,
+        avgViews: scrapedData.avgViews,
+        engagementRate: scrapedData.engagementRate,
+        isVerified: scrapedData.isVerified,
+        isBusiness: scrapedData.isBusiness,
+        recentPostsCount: scrapedData.recentPosts?.length || 0,
+      };
+      response.message = `Канал @${cleanUsername} подключен! Получено ${scrapedData.followers.toLocaleString()} подписчиков, ${scrapedData.recentPosts?.length || 0} постов.`;
+    } else {
+      response.message = scrapeError 
+        ? `Канал добавлен, но автоматический сбор данных не удался: ${scrapeError}. Заполните статистику вручную.`
+        : 'Канал добавлен. Заполните статистику вручную.';
+      if (scrapeError) {
+        response.scrape_error = scrapeError;
+      }
+    }
+
+    return c.json(response);
   } catch (error: any) {
     console.error('Connect channel error:', error);
     return c.json({ success: false, error: 'Ошибка подключения канала', details: error?.message }, 500);
