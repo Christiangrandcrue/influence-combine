@@ -25,6 +25,12 @@ ideas.post('/generate', async (c) => {
     }
     
     const apiKey = c.env.OPENAI_API_KEY;
+    console.log('OpenAI API Key check:', {
+      exists: !!apiKey,
+      length: apiKey?.length,
+      prefix: apiKey?.substring(0, 15)
+    });
+    
     if (!apiKey) {
       return c.json({ success: false, error: 'OpenAI API не настроен' }, 500);
     }
@@ -78,9 +84,14 @@ ideas.post('/generate', async (c) => {
         limit: user.ideas_limit
       }
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Generate ideas error:', error);
-    return c.json({ success: false, error: 'Ошибка генерации идей' }, 500);
+    const errorMessage = error?.message || 'Неизвестная ошибка';
+    return c.json({ 
+      success: false, 
+      error: 'Ошибка генерации идей',
+      details: errorMessage
+    }, 500);
   }
 });
 

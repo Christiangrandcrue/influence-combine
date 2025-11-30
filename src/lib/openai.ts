@@ -36,27 +36,57 @@ export async function chatCompletion(
     response_format?: { type: 'text' | 'json_object' };
   } = {}
 ): Promise<string> {
+  // Validate API key format
+  if (!apiKey || apiKey.length < 20) {
+    throw new Error('OpenAI API key is invalid or not configured');
+  }
+  
+  const requestBody = {
+    model: options.model || 'gpt-4o',
+    messages,
+    temperature: options.temperature ?? 0.7,
+    max_tokens: options.max_tokens || 2000,
+    response_format: options.response_format
+  };
+
+  console.log('OpenAI request:', {
+    url: `${OPENAI_API_URL}/chat/completions`,
+    model: requestBody.model,
+    messagesCount: messages.length,
+    apiKeyPrefix: apiKey.substring(0, 15) + '...'
+  });
+
   const response = await fetch(`${OPENAI_API_URL}/chat/completions`, {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${apiKey}`,
       'Content-Type': 'application/json'
     },
-    body: JSON.stringify({
-      model: options.model || 'gpt-4o',
-      messages,
-      temperature: options.temperature ?? 0.7,
-      max_tokens: options.max_tokens || 2000,
-      response_format: options.response_format
-    })
+    body: JSON.stringify(requestBody)
   });
 
+  console.log('OpenAI response status:', response.status);
+
   if (!response.ok) {
-    const error = await response.text();
-    throw new Error(`OpenAI API error: ${error}`);
+    const errorText = await response.text();
+    console.error('OpenAI API error:', response.status, errorText);
+    
+    // Parse error for better messages
+    let errorMessage = `OpenAI API error (${response.status})`;
+    try {
+      const errorJson = JSON.parse(errorText);
+      if (errorJson.error?.message) {
+        errorMessage = errorJson.error.message;
+      }
+    } catch {
+      errorMessage = errorText.substring(0, 200);
+    }
+    
+    throw new Error(errorMessage);
   }
 
   const data: ChatCompletionResponse = await response.json();
+  console.log('OpenAI success, tokens used:', data.usage?.total_tokens);
   return data.choices[0]?.message?.content || '';
 }
 
