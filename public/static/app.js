@@ -8,7 +8,8 @@ const state = {
   ideas: [],
   videos: [],
   chatMessages: [],
-  isLoading: false
+  isLoading: false,
+  currentVideo: null
 };
 
 // ============ API HELPERS ============
@@ -481,18 +482,18 @@ async function loadVideosPage() {
       <div class="flex items-center justify-between mb-4">
         <div>
           <h2 class="text-xl font-semibold">Анализ видео</h2>
-          <p class="text-sm text-slate-400">Загрузите видео для получения детального анализа</p>
+          <p class="text-sm text-slate-400">Загрузите видео для AI-анализа с прогнозом статистики</p>
         </div>
         <button onclick="showUploadModal()" class="px-6 py-3 rounded-xl gradient-bg text-white font-medium hover:opacity-90 transition">
-          <i class="fas fa-upload mr-2"></i>Загрузить
+          <i class="fas fa-plus mr-2"></i>Добавить видео
         </button>
       </div>
     </div>
     
     <div id="videosList" class="space-y-4">
       <div class="text-center py-12 text-slate-400">
-        <i class="fas fa-video text-5xl mb-4 opacity-30"></i>
-        <p>Загрузите первое видео для анализа</p>
+        <i class="fas fa-spinner fa-spin text-4xl mb-4"></i>
+        <p>Загрузка...</p>
       </div>
     </div>
   `;
@@ -507,6 +508,12 @@ async function loadVideos() {
     renderVideos();
   } catch (error) {
     console.error('Load videos error:', error);
+    document.getElementById('videosList').innerHTML = `
+      <div class="text-center py-12 text-red-400">
+        <i class="fas fa-exclamation-triangle text-4xl mb-4"></i>
+        <p>Ошибка загрузки: ${error.message}</p>
+      </div>
+    `;
   }
 }
 
@@ -515,56 +522,105 @@ function renderVideos() {
   
   if (state.videos.length === 0) {
     container.innerHTML = `
-      <div class="text-center py-12 text-slate-400">
-        <i class="fas fa-video text-5xl mb-4 opacity-30"></i>
-        <p>Пока нет видео</p>
+      <div class="text-center py-16">
+        <div class="w-24 h-24 rounded-2xl bg-gradient-to-br from-primary-500/20 to-accent-500/20 flex items-center justify-center mx-auto mb-6">
+          <i class="fas fa-video text-4xl text-primary-400"></i>
+        </div>
+        <h3 class="text-xl font-semibold mb-2">Добавьте первое видео</h3>
+        <p class="text-slate-400 mb-6 max-w-md mx-auto">
+          AI проанализирует ваш Reels и даст рекомендации по улучшению с прогнозом статистики
+        </p>
+        <button onclick="showUploadModal()" class="px-6 py-3 rounded-xl gradient-bg text-white font-medium hover:opacity-90 transition">
+          <i class="fas fa-plus mr-2"></i>Добавить видео
+        </button>
       </div>
     `;
     return;
   }
   
   container.innerHTML = state.videos.map(video => `
-    <div class="p-6 rounded-2xl bg-slate-900/50 border border-white/10 hover:border-primary-500/30 transition cursor-pointer" onclick="viewVideo('${video.id}')">
+    <div class="p-6 rounded-2xl bg-slate-900/50 border border-white/10 hover:border-primary-500/30 transition">
       <div class="flex items-start justify-between">
         <div class="flex items-start space-x-4">
-          <div class="w-16 h-16 rounded-xl bg-slate-800 flex items-center justify-center">
-            <i class="fas fa-video text-2xl text-slate-400"></i>
+          <div class="w-16 h-16 rounded-xl bg-slate-800 flex items-center justify-center ${video.status === 'analyzing' ? 'animate-pulse' : ''}">
+            ${video.status === 'analyzing' 
+              ? '<i class="fas fa-spinner fa-spin text-2xl text-primary-400"></i>'
+              : '<i class="fas fa-video text-2xl text-slate-400"></i>'
+            }
           </div>
           <div>
             <h3 class="font-semibold mb-1">${video.filename}</h3>
             <div class="flex items-center space-x-3 text-sm text-slate-400">
-              <span>${formatStatus(video.status)}</span>
+              <span>${formatVideoStatus(video.status)}</span>
               ${video.duration_seconds ? `<span>${formatDuration(video.duration_seconds)}</span>` : ''}
               <span>${formatDate(video.created_at)}</span>
             </div>
           </div>
         </div>
         
-        ${video.overall_score ? `
-          <div class="text-center">
-            <div class="text-3xl font-bold ${getScoreColor(video.overall_score)}">${Math.round(video.overall_score)}</div>
-            <div class="text-xs text-slate-400">балл</div>
-          </div>
-        ` : ''}
+        <div class="flex items-center space-x-3">
+          ${video.overall_score ? `
+            <div class="text-center">
+              <div class="text-3xl font-bold ${getScoreColor(video.overall_score)}">${Math.round(video.overall_score)}</div>
+              <div class="text-xs text-slate-400">балл</div>
+            </div>
+          ` : ''}
+          <button onclick="deleteVideo('${video.id}')" class="p-2 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 transition" title="Удалить">
+            <i class="fas fa-trash"></i>
+          </button>
+        </div>
       </div>
       
       ${video.status === 'completed' ? `
-        <div class="mt-4 pt-4 border-t border-white/10 grid grid-cols-4 gap-4">
-          <div class="text-center">
-            <div class="text-lg font-semibold ${getScoreColor(video.hook_score || 0)}">${video.hook_score || '—'}</div>
-            <div class="text-xs text-slate-400">Хук</div>
+        <div class="mt-4 pt-4 border-t border-white/10">
+          <div class="grid grid-cols-5 gap-4 mb-4">
+            <div class="text-center">
+              <div class="text-lg font-semibold ${getScoreColor(video.hook_score || 0)}">${video.hook_score || '—'}</div>
+              <div class="text-xs text-slate-400">Хук</div>
+            </div>
+            <div class="text-center">
+              <div class="text-lg font-semibold ${getScoreColor(video.retention_score || 0)}">${video.retention_score || '—'}</div>
+              <div class="text-xs text-slate-400">Удержание</div>
+            </div>
+            <div class="text-center">
+              <div class="text-lg font-semibold ${getScoreColor(video.clarity_score || 0)}">${video.clarity_score || '—'}</div>
+              <div class="text-xs text-slate-400">Контент</div>
+            </div>
+            <div class="text-center">
+              <div class="text-lg font-semibold ${getScoreColor(video.cta_score || 0)}">${video.cta_score || '—'}</div>
+              <div class="text-xs text-slate-400">CTA</div>
+            </div>
+            <div class="text-center">
+              ${video.prediction_current ? `
+                <div class="text-lg font-semibold text-accent-400">${formatNumber(video.prediction_current.views?.likely)}</div>
+                <div class="text-xs text-slate-400">Прогноз</div>
+              ` : '<div class="text-lg font-semibold text-slate-500">—</div><div class="text-xs text-slate-400">Прогноз</div>'}
+            </div>
           </div>
-          <div class="text-center">
-            <div class="text-lg font-semibold ${getScoreColor(video.retention_score || 0)}">${video.retention_score || '—'}</div>
-            <div class="text-xs text-slate-400">Удержание</div>
+          
+          <div class="flex items-center justify-between">
+            <div class="text-sm text-slate-400">
+              ${video.recommendations?.length ? `<i class="fas fa-lightbulb text-yellow-400 mr-1"></i>${video.recommendations.length} рекомендаций` : ''}
+            </div>
+            <button onclick="viewVideo('${video.id}')" class="px-4 py-2 rounded-lg bg-primary-500/20 text-primary-400 hover:bg-primary-500/30 transition text-sm font-medium">
+              <i class="fas fa-chart-bar mr-1"></i>Подробный анализ
+            </button>
           </div>
-          <div class="text-center">
-            <div class="text-lg font-semibold ${getScoreColor(video.clarity_score || 0)}">${video.clarity_score || '—'}</div>
-            <div class="text-xs text-slate-400">Ясность</div>
-          </div>
-          <div class="text-center">
-            <div class="text-lg font-semibold ${getScoreColor(video.cta_score || 0)}">${video.cta_score || '—'}</div>
-            <div class="text-xs text-slate-400">CTA</div>
+        </div>
+      ` : video.status === 'pending' ? `
+        <div class="mt-4 pt-4 border-t border-white/10 flex items-center justify-between">
+          <span class="text-sm text-slate-400">Видео готово к анализу</span>
+          <button onclick="analyzeVideo('${video.id}')" class="px-4 py-2 rounded-lg gradient-bg text-white hover:opacity-90 transition text-sm font-medium">
+            <i class="fas fa-brain mr-1"></i>Анализировать AI
+          </button>
+        </div>
+      ` : video.status === 'analyzing' ? `
+        <div class="mt-4 pt-4 border-t border-white/10">
+          <div class="flex items-center space-x-3">
+            <div class="flex-1 h-2 bg-slate-800 rounded-full overflow-hidden">
+              <div class="h-full gradient-bg rounded-full animate-pulse" style="width: 60%"></div>
+            </div>
+            <span class="text-sm text-primary-400">Анализируем...</span>
           </div>
         </div>
       ` : ''}
@@ -572,77 +628,723 @@ function renderVideos() {
   `).join('');
 }
 
+function formatVideoStatus(status) {
+  const statuses = {
+    pending: '⏳ Ожидает анализа',
+    analyzing: '🔍 Анализируется',
+    completed: '✅ Проанализировано',
+    failed: '❌ Ошибка'
+  };
+  return statuses[status] || status;
+}
+
+// Video upload state
+let uploadedVideoFile = null;
+let extractedFrames = [];
+let extractedAudio = null;
+
 function showUploadModal() {
+  uploadedVideoFile = null;
+  extractedFrames = [];
+  extractedAudio = null;
+  
   const modal = document.createElement('div');
   modal.className = 'fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4';
   modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
   
   modal.innerHTML = `
-    <div class="bg-slate-900 rounded-2xl w-full max-w-lg border border-white/10 p-6">
+    <div class="bg-slate-900 rounded-2xl w-full max-w-2xl border border-white/10 p-6 max-h-[90vh] overflow-y-auto">
       <div class="flex items-center justify-between mb-6">
-        <h2 class="text-xl font-bold">Загрузить видео</h2>
+        <div>
+          <h2 class="text-xl font-bold">Анализ видео</h2>
+          <p class="text-sm text-slate-400">Загрузите видео или опишите для AI-анализа</p>
+        </div>
         <button onclick="this.closest('.fixed').remove()" class="text-slate-400 hover:text-white">
           <i class="fas fa-times text-xl"></i>
         </button>
       </div>
       
-      <div class="p-8 border-2 border-dashed border-white/20 rounded-xl text-center hover:border-primary-500/50 transition cursor-pointer mb-4">
-        <i class="fas fa-cloud-upload-alt text-4xl text-slate-400 mb-4"></i>
-        <p class="text-slate-300 mb-2">Перетащите видео сюда</p>
-        <p class="text-sm text-slate-500">или нажмите для выбора файла</p>
-        <p class="text-xs text-slate-600 mt-2">MP4, MOV до 100MB</p>
+      <!-- Upload Method Tabs -->
+      <div class="flex space-x-2 mb-6">
+        <button onclick="switchUploadTab('file')" id="tabFile" class="flex-1 py-3 rounded-xl bg-primary-500/20 text-primary-400 font-medium transition">
+          <i class="fas fa-upload mr-2"></i>Загрузить файл
+        </button>
+        <button onclick="switchUploadTab('text')" id="tabText" class="flex-1 py-3 rounded-xl bg-slate-800 text-slate-400 font-medium transition hover:bg-slate-700">
+          <i class="fas fa-edit mr-2"></i>Описать
+        </button>
       </div>
       
-      <div class="text-center text-slate-400 text-sm mb-4">— или —</div>
+      <!-- File Upload Section -->
+      <div id="uploadFileSection">
+        <div id="dropZone" class="border-2 border-dashed border-white/20 rounded-2xl p-8 text-center hover:border-primary-500/50 transition cursor-pointer mb-4" onclick="document.getElementById('videoFileInput').click()">
+          <input type="file" id="videoFileInput" accept="video/mp4,video/quicktime,video/webm,.mp4,.mov,.webm" class="hidden" onchange="handleVideoFileSelect(event)">
+          <div id="dropZoneContent">
+            <div class="w-16 h-16 rounded-2xl bg-primary-500/20 flex items-center justify-center mx-auto mb-4">
+              <i class="fas fa-cloud-upload-alt text-3xl text-primary-400"></i>
+            </div>
+            <p class="font-medium mb-2">Перетащите видео сюда</p>
+            <p class="text-sm text-slate-400 mb-3">или нажмите для выбора</p>
+            <p class="text-xs text-slate-500">MP4, MOV, WebM • до 100MB</p>
+          </div>
+          <div id="videoPreviewContainer" class="hidden">
+            <video id="videoPreview" class="max-h-48 mx-auto rounded-xl mb-4" controls></video>
+            <div class="flex items-center justify-center space-x-4">
+              <span id="videoFileName" class="text-sm text-slate-300"></span>
+              <button onclick="event.stopPropagation(); clearVideoFile()" class="text-red-400 hover:text-red-300 text-sm">
+                <i class="fas fa-trash mr-1"></i>Удалить
+              </button>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Processing status -->
+        <div id="processingStatus" class="hidden mb-4 p-4 rounded-xl bg-slate-800/50">
+          <div class="flex items-center space-x-3 mb-2">
+            <div class="animate-spin rounded-full h-5 w-5 border-b-2 border-primary-500"></div>
+            <span id="processingText" class="text-sm text-slate-300">Обработка видео...</span>
+          </div>
+          <div class="w-full h-2 bg-slate-700 rounded-full overflow-hidden">
+            <div id="processingProgress" class="h-full gradient-bg rounded-full transition-all duration-300" style="width: 0%"></div>
+          </div>
+        </div>
+        
+        <!-- Extracted info -->
+        <div id="extractedInfo" class="hidden mb-4 p-4 rounded-xl bg-green-500/10 border border-green-500/30">
+          <div class="flex items-center space-x-2 mb-2">
+            <i class="fas fa-check-circle text-green-400"></i>
+            <span class="text-green-400 font-medium">Видео обработано</span>
+          </div>
+          <div class="grid grid-cols-3 gap-4 text-sm">
+            <div>
+              <span class="text-slate-400">Длительность:</span>
+              <span id="extractedDuration" class="text-white ml-1">—</span>
+            </div>
+            <div>
+              <span class="text-slate-400">Кадры:</span>
+              <span id="extractedFramesCount" class="text-white ml-1">0</span>
+            </div>
+            <div>
+              <span class="text-slate-400">Аудио:</span>
+              <span id="extractedAudioStatus" class="text-white ml-1">—</span>
+            </div>
+          </div>
+        </div>
+      </div>
       
-      <input 
-        type="text" 
-        id="videoUrl" 
-        placeholder="Вставьте ссылку на видео"
-        class="w-full px-4 py-3 rounded-xl bg-slate-800 border border-white/10 focus:border-primary-500 focus:outline-none mb-4"
-      >
+      <!-- Text Description Section (hidden by default) -->
+      <div id="uploadTextSection" class="hidden">
+        <!-- Video name -->
+        <div class="mb-4">
+          <label class="block text-sm font-medium text-slate-300 mb-2">Название видео *</label>
+          <input 
+            type="text" 
+            id="videoName"
+            placeholder="Например: 5 привычек успешных людей"
+            class="w-full px-4 py-3 rounded-xl bg-slate-800 border border-white/10 focus:border-primary-500 focus:outline-none"
+          >
+        </div>
+        
+        <!-- Hook -->
+        <div class="mb-4">
+          <label class="block text-sm font-medium text-slate-300 mb-2">
+            Хук (первые 3 секунды)
+            <span class="text-slate-500">— что цепляет зрителя</span>
+          </label>
+          <textarea 
+            id="videoHook"
+            rows="2"
+            placeholder="Что происходит в первые 3 секунды? Первая фраза или визуальный крючок"
+            class="w-full px-4 py-3 rounded-xl bg-slate-800 border border-white/10 focus:border-primary-500 focus:outline-none resize-none"
+          ></textarea>
+        </div>
+        
+        <!-- Description/Transcript -->
+        <div class="mb-4">
+          <label class="block text-sm font-medium text-slate-300 mb-2">Описание / Транскрипт</label>
+          <textarea 
+            id="videoDescription"
+            rows="4"
+            placeholder="Опишите содержание: о чём рассказываете, ключевые моменты. Можно вставить транскрипт речи."
+            class="w-full px-4 py-3 rounded-xl bg-slate-800 border border-white/10 focus:border-primary-500 focus:outline-none resize-none"
+          ></textarea>
+        </div>
+      </div>
       
-      <button onclick="uploadVideoByUrl()" class="w-full py-3 rounded-xl gradient-bg text-white font-medium hover:opacity-90 transition">
-        Начать анализ
-      </button>
+      <!-- Common fields -->
+      <div class="space-y-4 mt-4">
+        <!-- Duration & Topic -->
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="block text-sm font-medium text-slate-300 mb-2">Длительность</label>
+            <select id="videoDuration" class="w-full px-4 py-3 rounded-xl bg-slate-800 border border-white/10 focus:border-primary-500 focus:outline-none">
+              <option value="15">15 секунд</option>
+              <option value="30" selected>30 секунд</option>
+              <option value="45">45 секунд</option>
+              <option value="60">60 секунд</option>
+              <option value="90">90 секунд</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-slate-300 mb-2">Тема/Ниша</label>
+            <input 
+              type="text" 
+              id="videoTopic"
+              placeholder="Например: бизнес, продуктивность"
+              class="w-full px-4 py-3 rounded-xl bg-slate-800 border border-white/10 focus:border-primary-500 focus:outline-none"
+            >
+          </div>
+        </div>
+        
+        <!-- Hashtags -->
+        <div>
+          <label class="block text-sm font-medium text-slate-300 mb-2">Хэштеги <span class="text-slate-500">(через запятую)</span></label>
+          <input 
+            type="text" 
+            id="videoHashtags"
+            placeholder="#бизнес, #продуктивность, #саморазвитие"
+            class="w-full px-4 py-3 rounded-xl bg-slate-800 border border-white/10 focus:border-primary-500 focus:outline-none"
+          >
+        </div>
+      </div>
       
-      <p class="text-xs text-slate-500 text-center mt-4">
-        * В текущей версии поддерживается только анализ по URL
-      </p>
+      <!-- Analysis type info -->
+      <div id="analysisTypeInfo" class="mt-4 p-4 rounded-xl bg-slate-800/50 text-sm">
+        <div class="flex items-center space-x-2 mb-2">
+          <i class="fas fa-info-circle text-primary-400"></i>
+          <span class="font-medium">Тип анализа</span>
+        </div>
+        <p id="analysisTypeText" class="text-slate-400">
+          Загрузите видеофайл для полного AI-анализа с распознаванием речи и визуальным анализом кадров. 
+          Или опишите видео текстом для базового анализа.
+        </p>
+      </div>
+      
+      <div class="pt-6 flex items-center space-x-4">
+        <button onclick="submitVideoForAnalysis(event)" id="submitVideoBtn" class="flex-1 py-4 rounded-xl gradient-bg text-white font-semibold hover:opacity-90 transition flex items-center justify-center space-x-2">
+          <i class="fas fa-brain"></i>
+          <span>Анализировать AI</span>
+        </button>
+        <button type="button" onclick="this.closest('.fixed').remove()" class="px-6 py-4 rounded-xl bg-slate-800 text-slate-300 hover:bg-slate-700 transition">
+          Отмена
+        </button>
+      </div>
+    </div>
+  `;
+  
+  document.body.appendChild(modal);
+  
+  // Setup drag and drop
+  const dropZone = document.getElementById('dropZone');
+  dropZone.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    dropZone.classList.add('border-primary-500', 'bg-primary-500/5');
+  });
+  dropZone.addEventListener('dragleave', () => {
+    dropZone.classList.remove('border-primary-500', 'bg-primary-500/5');
+  });
+  dropZone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    dropZone.classList.remove('border-primary-500', 'bg-primary-500/5');
+    const files = e.dataTransfer.files;
+    if (files.length > 0) {
+      handleVideoFile(files[0]);
+    }
+  });
+}
+
+function switchUploadTab(tab) {
+  const tabFile = document.getElementById('tabFile');
+  const tabText = document.getElementById('tabText');
+  const fileSection = document.getElementById('uploadFileSection');
+  const textSection = document.getElementById('uploadTextSection');
+  const analysisText = document.getElementById('analysisTypeText');
+  
+  if (tab === 'file') {
+    tabFile.classList.remove('bg-slate-800', 'text-slate-400');
+    tabFile.classList.add('bg-primary-500/20', 'text-primary-400');
+    tabText.classList.remove('bg-primary-500/20', 'text-primary-400');
+    tabText.classList.add('bg-slate-800', 'text-slate-400');
+    fileSection.classList.remove('hidden');
+    textSection.classList.add('hidden');
+    analysisText.textContent = 'Загрузите видеофайл для полного AI-анализа с распознаванием речи и визуальным анализом кадров.';
+  } else {
+    tabText.classList.remove('bg-slate-800', 'text-slate-400');
+    tabText.classList.add('bg-primary-500/20', 'text-primary-400');
+    tabFile.classList.remove('bg-primary-500/20', 'text-primary-400');
+    tabFile.classList.add('bg-slate-800', 'text-slate-400');
+    textSection.classList.remove('hidden');
+    fileSection.classList.add('hidden');
+    analysisText.textContent = 'Текстовый анализ менее точен. Рекомендуем загрузить видеофайл для лучших результатов.';
+  }
+}
+
+function handleVideoFileSelect(event) {
+  const file = event.target.files[0];
+  if (file) {
+    handleVideoFile(file);
+  }
+}
+
+async function handleVideoFile(file) {
+  // Validate file type
+  const allowedTypes = ['video/mp4', 'video/quicktime', 'video/webm', 'video/x-m4v'];
+  if (!allowedTypes.includes(file.type) && !file.name.match(/\.(mp4|mov|webm)$/i)) {
+    alert('Неподдерживаемый формат. Используйте MP4, MOV или WebM');
+    return;
+  }
+  
+  // Validate size (100MB)
+  if (file.size > 100 * 1024 * 1024) {
+    alert('Файл слишком большой. Максимум 100MB');
+    return;
+  }
+  
+  uploadedVideoFile = file;
+  
+  // Show preview
+  const preview = document.getElementById('videoPreview');
+  const previewContainer = document.getElementById('videoPreviewContainer');
+  const dropContent = document.getElementById('dropZoneContent');
+  const fileName = document.getElementById('videoFileName');
+  
+  preview.src = URL.createObjectURL(file);
+  fileName.textContent = file.name + ' (' + formatFileSize(file.size) + ')';
+  dropContent.classList.add('hidden');
+  previewContainer.classList.remove('hidden');
+  
+  // Wait for video metadata
+  preview.onloadedmetadata = async () => {
+    const duration = Math.round(preview.duration);
+    document.getElementById('videoDuration').value = 
+      duration <= 15 ? '15' : 
+      duration <= 30 ? '30' : 
+      duration <= 45 ? '45' : 
+      duration <= 60 ? '60' : '90';
+    
+    // Extract frames
+    await extractVideoFrames(preview, duration);
+  };
+}
+
+async function extractVideoFrames(videoElement, duration) {
+  const processingStatus = document.getElementById('processingStatus');
+  const processingText = document.getElementById('processingText');
+  const processingProgress = document.getElementById('processingProgress');
+  const extractedInfo = document.getElementById('extractedInfo');
+  
+  processingStatus.classList.remove('hidden');
+  processingText.textContent = 'Извлечение кадров...';
+  
+  extractedFrames = [];
+  
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+  
+  // Set canvas size (reduced for performance)
+  const scale = Math.min(1, 640 / videoElement.videoWidth);
+  canvas.width = videoElement.videoWidth * scale;
+  canvas.height = videoElement.videoHeight * scale;
+  
+  // Extract frames at key timestamps
+  const timestamps = [
+    0.5,                          // Hook start
+    1.5,                          // Hook middle
+    3,                            // Hook end
+    duration * 0.25,              // First quarter
+    duration * 0.5,               // Middle
+    duration * 0.75,              // Third quarter
+    Math.max(duration - 3, 0),    // Before CTA
+    Math.max(duration - 1, 0)     // CTA
+  ].filter(t => t < duration);
+  
+  for (let i = 0; i < timestamps.length; i++) {
+    const timestamp = timestamps[i];
+    processingProgress.style.width = `${(i / timestamps.length) * 70}%`;
+    processingText.textContent = `Извлечение кадра ${i + 1}/${timestamps.length}...`;
+    
+    try {
+      const frame = await captureFrame(videoElement, timestamp, canvas, ctx);
+      if (frame) {
+        extractedFrames.push(frame);
+      }
+    } catch (e) {
+      console.error('Frame extraction error:', e);
+    }
+  }
+  
+  processingProgress.style.width = '100%';
+  processingText.textContent = 'Обработка завершена';
+  
+  // Show extracted info
+  setTimeout(() => {
+    processingStatus.classList.add('hidden');
+    extractedInfo.classList.remove('hidden');
+    document.getElementById('extractedDuration').textContent = formatDuration(duration);
+    document.getElementById('extractedFramesCount').textContent = extractedFrames.length;
+    document.getElementById('extractedAudioStatus').textContent = 'Готово';
+    
+    // Update analysis type info
+    document.getElementById('analysisTypeText').innerHTML = `
+      <span class="text-green-400"><i class="fas fa-check mr-1"></i>Полный анализ:</span> 
+      ${extractedFrames.length} кадров для визуального анализа + аудио для транскрипции
+    `;
+  }, 500);
+}
+
+function captureFrame(video, timestamp, canvas, ctx) {
+  return new Promise((resolve) => {
+    video.currentTime = timestamp;
+    video.onseeked = () => {
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+      resolve(dataUrl);
+    };
+    // Timeout fallback
+    setTimeout(() => resolve(null), 2000);
+  });
+}
+
+function clearVideoFile() {
+  uploadedVideoFile = null;
+  extractedFrames = [];
+  
+  const preview = document.getElementById('videoPreview');
+  const previewContainer = document.getElementById('videoPreviewContainer');
+  const dropContent = document.getElementById('dropZoneContent');
+  const extractedInfo = document.getElementById('extractedInfo');
+  const fileInput = document.getElementById('videoFileInput');
+  
+  preview.src = '';
+  previewContainer.classList.add('hidden');
+  dropContent.classList.remove('hidden');
+  extractedInfo.classList.add('hidden');
+  fileInput.value = '';
+  
+  document.getElementById('analysisTypeText').textContent = 
+    'Загрузите видеофайл для полного AI-анализа с распознаванием речи и визуальным анализом кадров.';
+}
+
+function formatFileSize(bytes) {
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+}
+
+async function submitVideoForAnalysis(e) {
+  if (e) e.preventDefault();
+  
+  const btn = document.getElementById('submitVideoBtn');
+  btn.disabled = true;
+  
+  const name = document.getElementById('videoName')?.value || (uploadedVideoFile?.name || 'Видео');
+  const hook = document.getElementById('videoHook')?.value || '';
+  const description = document.getElementById('videoDescription')?.value || '';
+  const duration = parseInt(document.getElementById('videoDuration').value);
+  const topic = document.getElementById('videoTopic')?.value || '';
+  const hashtagsRaw = document.getElementById('videoHashtags')?.value || '';
+  const hashtags = hashtagsRaw ? hashtagsRaw.split(',').map(t => t.trim()) : [];
+  
+  try {
+    let videoId;
+    
+    // Check if we have a file upload or text description
+    if (uploadedVideoFile && extractedFrames.length > 0) {
+      // Full video analysis with frames
+      btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Загрузка видео...';
+      
+      // Upload file to R2
+      const formData = new FormData();
+      formData.append('file', uploadedVideoFile);
+      
+      const uploadResponse = await fetch('/api/videos/upload-file', {
+        method: 'POST',
+        body: formData,
+        credentials: 'include'
+      });
+      
+      const uploadResult = await uploadResponse.json();
+      if (!uploadResult.success) {
+        throw new Error(uploadResult.error || 'Ошибка загрузки');
+      }
+      
+      videoId = uploadResult.video_id;
+      
+      btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>AI анализирует видео...';
+      
+      // Prepare frames for analysis
+      const hookFrames = extractedFrames.slice(0, 3);
+      const middleFrames = extractedFrames.slice(3, 6);
+      const endFrames = extractedFrames.slice(6);
+      
+      // Full analysis with vision
+      const analysisResult = await api(`/videos/${videoId}/analyze-full`, {
+        method: 'POST',
+        body: JSON.stringify({
+          hookFrames,
+          middleFrames,
+          endFrames,
+          transcript: description || hook,
+          duration,
+          topic,
+          hashtags
+        })
+      });
+      
+      console.log('Full analysis result:', analysisResult);
+      
+    } else {
+      // Text-only analysis
+      if (!name) {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-brain"></i><span>Анализировать AI</span>';
+        alert('Введите название видео или загрузите файл');
+        return;
+      }
+      
+      btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Создаём...';
+      
+      // Create video record
+      const createResult = await api('/videos/upload', {
+        method: 'POST',
+        body: JSON.stringify({ 
+          filename: name,
+          duration_seconds: duration,
+          description: description || hook
+        })
+      });
+      
+      videoId = createResult.video_id;
+      
+      btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>AI анализирует...';
+      
+      // Text-based analysis
+      await api(`/videos/${videoId}/analyze`, {
+        method: 'POST',
+        body: JSON.stringify({
+          description,
+          hook,
+          duration,
+          topic,
+          hashtags
+        })
+      });
+    }
+    
+    // Close modal
+    document.querySelector('.fixed.z-50')?.remove();
+    
+    // Show results
+    await loadVideos();
+    viewVideo(videoId);
+    
+  } catch (error) {
+    console.error('Analysis error:', error);
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fas fa-brain"></i><span>Анализировать AI</span>';
+    alert('Ошибка: ' + error.message);
+  }
+}
+
+async function analyzeVideo(videoId) {
+  try {
+    const btn = event.target.closest('button');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Анализируем...';
+    
+    await api(`/videos/${videoId}/analyze`, { method: 'POST', body: JSON.stringify({}) });
+    await loadVideos();
+    
+  } catch (error) {
+    alert('Ошибка анализа: ' + error.message);
+    await loadVideos();
+  }
+}
+
+async function viewVideo(videoId) {
+  try {
+    const result = await api(`/videos/${videoId}`);
+    state.currentVideo = result.video;
+    showVideoAnalysisModal(result.video);
+  } catch (error) {
+    alert('Ошибка: ' + error.message);
+  }
+}
+
+function showVideoAnalysisModal(video) {
+  const modal = document.createElement('div');
+  modal.className = 'fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4';
+  modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
+  
+  const pred = video.prediction_current || {};
+  const predImproved = video.prediction_improved || {};
+  const recs = video.recommendations || [];
+  
+  modal.innerHTML = `
+    <div class="bg-slate-900 rounded-2xl w-full max-w-4xl border border-white/10 max-h-[90vh] overflow-hidden flex flex-col">
+      <!-- Header -->
+      <div class="p-6 border-b border-white/10 flex items-center justify-between shrink-0">
+        <div>
+          <h2 class="text-xl font-bold">${video.filename}</h2>
+          <p class="text-sm text-slate-400">Детальный AI-анализ</p>
+        </div>
+        <button onclick="this.closest('.fixed').remove()" class="p-2 rounded-lg hover:bg-white/10 transition">
+          <i class="fas fa-times text-xl"></i>
+        </button>
+      </div>
+      
+      <div class="p-6 overflow-y-auto flex-1">
+        <!-- Overall Score & Verdict -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+          <div class="p-6 rounded-2xl bg-gradient-to-br from-primary-500/20 to-accent-500/20 border border-white/10 text-center">
+            <div class="text-5xl font-bold ${getScoreColor(video.overall_score)}">${video.overall_score || '—'}</div>
+            <div class="text-slate-400 mt-2">Общий балл</div>
+          </div>
+          <div class="md:col-span-2 p-6 rounded-2xl bg-slate-800/50 border border-white/10">
+            <div class="text-sm text-slate-400 mb-2"><i class="fas fa-gavel mr-2"></i>Вердикт AI</div>
+            <p class="text-slate-200">${video.analysis_verdict || 'Анализ завершён'}</p>
+          </div>
+        </div>
+        
+        <!-- Scores Grid -->
+        <div class="grid grid-cols-4 gap-4 mb-6">
+          <div class="p-4 rounded-xl bg-slate-800/50 text-center">
+            <div class="text-3xl font-bold ${getScoreColor(video.hook_score)}">${video.hook_score || '—'}</div>
+            <div class="text-xs text-slate-400 mt-1">Хук</div>
+          </div>
+          <div class="p-4 rounded-xl bg-slate-800/50 text-center">
+            <div class="text-3xl font-bold ${getScoreColor(video.retention_score)}">${video.retention_score || '—'}</div>
+            <div class="text-xs text-slate-400 mt-1">Удержание</div>
+          </div>
+          <div class="p-4 rounded-xl bg-slate-800/50 text-center">
+            <div class="text-3xl font-bold ${getScoreColor(video.clarity_score)}">${video.clarity_score || '—'}</div>
+            <div class="text-xs text-slate-400 mt-1">Контент</div>
+          </div>
+          <div class="p-4 rounded-xl bg-slate-800/50 text-center">
+            <div class="text-3xl font-bold ${getScoreColor(video.cta_score)}">${video.cta_score || '—'}</div>
+            <div class="text-xs text-slate-400 mt-1">CTA</div>
+          </div>
+        </div>
+        
+        <!-- Predictions Comparison -->
+        ${pred.views ? `
+          <div class="mb-6">
+            <h3 class="font-semibold mb-4"><i class="fas fa-chart-line mr-2 text-accent-400"></i>Прогноз статистики</h3>
+            <div class="grid grid-cols-2 gap-4">
+              <!-- Current -->
+              <div class="p-5 rounded-xl bg-slate-800/50 border border-white/10">
+                <div class="text-sm text-slate-400 mb-3">📊 Текущий прогноз</div>
+                <div class="space-y-3">
+                  <div class="flex justify-between items-center">
+                    <span class="text-slate-400"><i class="fas fa-eye mr-2"></i>Просмотры</span>
+                    <span class="font-semibold">${formatNumber(pred.views?.likely)}</span>
+                  </div>
+                  <div class="flex justify-between items-center">
+                    <span class="text-slate-400"><i class="fas fa-heart mr-2"></i>Лайки</span>
+                    <span class="font-semibold">${formatNumber(pred.likes?.likely)}</span>
+                  </div>
+                  <div class="flex justify-between items-center">
+                    <span class="text-slate-400"><i class="fas fa-comment mr-2"></i>Комментарии</span>
+                    <span class="font-semibold">${formatNumber(pred.comments?.likely)}</span>
+                  </div>
+                  <div class="flex justify-between items-center">
+                    <span class="text-slate-400"><i class="fas fa-share mr-2"></i>Репосты</span>
+                    <span class="font-semibold">${formatNumber(pred.shares?.likely)}</span>
+                  </div>
+                  <div class="pt-3 border-t border-white/10">
+                    <div class="flex justify-between items-center">
+                      <span class="text-slate-400">Виральность</span>
+                      <span class="font-semibold">${Math.round((pred.viral_probability || 0) * 100)}%</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
+              <!-- Improved -->
+              <div class="p-5 rounded-xl bg-gradient-to-br from-green-500/10 to-accent-500/10 border border-green-500/30">
+                <div class="text-sm text-green-400 mb-3">🚀 После улучшений</div>
+                <div class="space-y-3">
+                  <div class="flex justify-between items-center">
+                    <span class="text-slate-400"><i class="fas fa-eye mr-2"></i>Просмотры</span>
+                    <span class="font-semibold text-green-400">${formatNumber(predImproved.views?.likely)} <span class="text-xs">↑${Math.round(((predImproved.views?.likely || 0) / (pred.views?.likely || 1) - 1) * 100)}%</span></span>
+                  </div>
+                  <div class="flex justify-between items-center">
+                    <span class="text-slate-400"><i class="fas fa-heart mr-2"></i>Лайки</span>
+                    <span class="font-semibold text-green-400">${formatNumber(predImproved.likes?.likely)}</span>
+                  </div>
+                  <div class="flex justify-between items-center">
+                    <span class="text-slate-400"><i class="fas fa-comment mr-2"></i>Комментарии</span>
+                    <span class="font-semibold text-green-400">${formatNumber(predImproved.comments?.likely)}</span>
+                  </div>
+                  <div class="flex justify-between items-center">
+                    <span class="text-slate-400"><i class="fas fa-share mr-2"></i>Репосты</span>
+                    <span class="font-semibold text-green-400">${formatNumber(predImproved.shares?.likely)}</span>
+                  </div>
+                  <div class="pt-3 border-t border-green-500/30">
+                    <div class="flex justify-between items-center">
+                      <span class="text-slate-400">Виральность</span>
+                      <span class="font-semibold text-green-400">${Math.round((predImproved.viral_probability || 0) * 100)}%</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            ${predImproved.improvement_summary ? `
+              <div class="mt-3 p-3 rounded-lg bg-green-500/10 border border-green-500/30 text-sm text-green-400">
+                <i class="fas fa-chart-line mr-2"></i>${predImproved.improvement_summary}
+              </div>
+            ` : ''}
+          </div>
+        ` : ''}
+        
+        <!-- Recommendations -->
+        ${recs.length ? `
+          <div class="mb-6">
+            <h3 class="font-semibold mb-4"><i class="fas fa-lightbulb mr-2 text-yellow-400"></i>Рекомендации по улучшению</h3>
+            <div class="space-y-3">
+              ${recs.map((rec, i) => `
+                <div class="p-4 rounded-xl bg-slate-800/50 border-l-4 ${rec.priority === 'high' ? 'border-red-500' : rec.priority === 'medium' ? 'border-yellow-500' : 'border-slate-500'}">
+                  <div class="flex items-start justify-between mb-2">
+                    <div class="flex items-center space-x-2">
+                      <span class="text-xs px-2 py-0.5 rounded-full ${rec.priority === 'high' ? 'bg-red-500/20 text-red-400' : rec.priority === 'medium' ? 'bg-yellow-500/20 text-yellow-400' : 'bg-slate-500/20 text-slate-400'}">${rec.priority}</span>
+                      <span class="font-medium">${rec.title}</span>
+                    </div>
+                    ${rec.impact ? `
+                      <span class="text-xs text-green-400">+${rec.impact.change_percent || 0}%</span>
+                    ` : ''}
+                  </div>
+                  <p class="text-sm text-slate-400 mb-2">${rec.problem || rec.description}</p>
+                  <p class="text-sm text-primary-400"><i class="fas fa-arrow-right mr-1"></i>${rec.solution || rec.action}</p>
+                  ${rec.example ? `<p class="text-xs text-slate-500 mt-2">Пример: "${rec.example}"</p>` : ''}
+                  ${rec.effort ? `<div class="text-xs text-slate-500 mt-2"><i class="fas fa-clock mr-1"></i>${rec.time_to_implement || rec.effort}</div>` : ''}
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        ` : ''}
+      </div>
+      
+      <!-- Footer -->
+      <div class="p-4 border-t border-white/10 flex items-center justify-between shrink-0">
+        <button onclick="deleteVideo('${video.id}'); this.closest('.fixed').remove();" class="px-4 py-2 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 transition">
+          <i class="fas fa-trash mr-1"></i>Удалить
+        </button>
+        <button onclick="this.closest('.fixed').remove()" class="px-6 py-2 rounded-lg bg-primary-500 text-white hover:bg-primary-600 transition">
+          Закрыть
+        </button>
+      </div>
     </div>
   `;
   
   document.body.appendChild(modal);
 }
 
-async function uploadVideoByUrl() {
-  const url = document.getElementById('videoUrl')?.value;
-  
-  if (!url) {
-    alert('Введите URL видео');
-    return;
-  }
+async function deleteVideo(videoId) {
+  if (!confirm('Удалить это видео?')) return;
   
   try {
-    // Create video record
-    const createResult = await api('/videos/upload', {
-      method: 'POST',
-      body: JSON.stringify({ 
-        filename: url.split('/').pop() || 'video.mp4',
-        file_url: url
-      })
-    });
-    
-    // Start analysis
-    await api(`/videos/${createResult.video_id}/analyze`, { method: 'POST' });
-    
-    // Close modal and refresh
-    document.querySelector('.fixed.z-50')?.remove();
-    await loadVideos();
-    
-    // Poll for status
-    pollVideoStatus(createResult.video_id);
-    
+    await api(`/videos/${videoId}`, { method: 'DELETE' });
+    state.videos = state.videos.filter(v => v.id !== videoId);
+    renderVideos();
   } catch (error) {
     alert('Ошибка: ' + error.message);
   }
@@ -658,6 +1360,9 @@ async function pollVideoStatus(videoId) {
       
       if (result.video.status === 'completed' || result.video.status === 'failed') {
         await loadVideos();
+        if (result.video.status === 'completed') {
+          viewVideo(videoId);
+        }
         return;
       }
       
@@ -1210,9 +1915,14 @@ function renderChannelDashboard(channel) {
               <p class="text-slate-400 mt-1 max-w-md">${channel.bio || 'Без описания'}</p>
             </div>
           </div>
-          <button onclick="refreshChannel()" class="p-3 rounded-xl bg-white/10 hover:bg-white/20 transition" title="Обновить данные">
-            <i class="fas fa-sync-alt"></i>
-          </button>
+          <div class="flex items-center space-x-2">
+            <button onclick="refreshChannel()" class="p-3 rounded-xl bg-white/10 hover:bg-white/20 transition" title="Обновить данные">
+              <i class="fas fa-sync-alt"></i>
+            </button>
+            <button onclick="deleteChannel('${channel.id}')" class="p-3 rounded-xl bg-red-500/20 hover:bg-red-500/30 text-red-400 transition" title="Удалить канал">
+              <i class="fas fa-trash"></i>
+            </button>
+          </div>
         </div>
       </div>
       
@@ -1505,6 +2215,21 @@ function useIdeaForPredict(title, hook) {
 async function refreshChannel() {
   if (currentChannel) {
     await loadChannelPage();
+  }
+}
+
+async function deleteChannel(channelId) {
+  if (!confirm('Удалить этот канал? Все данные анализа будут потеряны.')) {
+    return;
+  }
+  
+  try {
+    await api(`/channel/${channelId}`, { method: 'DELETE' });
+    currentChannel = null;
+    channelAnalysis = null;
+    await loadChannelPage();
+  } catch (error) {
+    alert('Ошибка удаления: ' + error.message);
   }
 }
 

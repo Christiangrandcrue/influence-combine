@@ -1,6 +1,322 @@
 // OpenAI API Integration for Influence Combine
+// Includes: Chat Completion, Whisper (transcription), GPT-4o Vision
 
 const OPENAI_API_URL = 'https://api.openai.com/v1';
+
+// ============ WHISPER TRANSCRIPTION ============
+
+interface WhisperResponse {
+  text: string;
+  language?: string;
+  duration?: number;
+  segments?: Array<{
+    start: number;
+    end: number;
+    text: string;
+  }>;
+}
+
+/**
+ * Transcribe audio using OpenAI Whisper API
+ * Accepts audio file as ArrayBuffer or Blob
+ */
+export async function transcribeAudio(
+  apiKey: string,
+  audioData: ArrayBuffer | Blob,
+  filename: string = 'audio.mp3',
+  options: {
+    language?: string;
+    prompt?: string;
+    response_format?: 'json' | 'verbose_json' | 'text' | 'srt' | 'vtt';
+  } = {}
+): Promise<WhisperResponse> {
+  const formData = new FormData();
+  
+  // Convert to Blob if ArrayBuffer
+  const blob = audioData instanceof Blob 
+    ? audioData 
+    : new Blob([audioData], { type: 'audio/mpeg' });
+  
+  formData.append('file', blob, filename);
+  formData.append('model', 'whisper-1');
+  formData.append('response_format', options.response_format || 'verbose_json');
+  
+  if (options.language) {
+    formData.append('language', options.language);
+  }
+  if (options.prompt) {
+    formData.append('prompt', options.prompt);
+  }
+
+  console.log('Whisper transcription request:', { filename, size: blob.size });
+
+  const response = await fetch(`${OPENAI_API_URL}/audio/transcriptions`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${apiKey}`
+    },
+    body: formData
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('Whisper API error:', response.status, errorText);
+    throw new Error(`Whisper API error (${response.status}): ${errorText.substring(0, 200)}`);
+  }
+
+  const data = await response.json();
+  console.log('Whisper transcription success:', { 
+    textLength: data.text?.length,
+    language: data.language,
+    duration: data.duration 
+  });
+  
+  return data;
+}
+
+// ============ GPT-4o VISION ============
+
+interface VisionMessage {
+  role: 'system' | 'user' | 'assistant';
+  content: string | Array<{
+    type: 'text' | 'image_url';
+    text?: string;
+    image_url?: {
+      url: string;
+      detail?: 'low' | 'high' | 'auto';
+    };
+  }>;
+}
+
+/**
+ * Analyze images/frames using GPT-4o Vision
+ * @param imageUrls - Array of image URLs or base64 data URIs
+ */
+export async function analyzeWithVision(
+  apiKey: string,
+  imageUrls: string[],
+  prompt: string,
+  options: {
+    detail?: 'low' | 'high' | 'auto';
+    max_tokens?: number;
+    temperature?: number;
+    systemPrompt?: string;
+  } = {}
+): Promise<string> {
+  const imageContent = imageUrls.map(url => ({
+    type: 'image_url' as const,
+    image_url: {
+      url: url,
+      detail: options.detail || 'auto'
+    }
+  }));
+
+  const messages: VisionMessage[] = [];
+  
+  if (options.systemPrompt) {
+    messages.push({ role: 'system', content: options.systemPrompt });
+  }
+  
+  messages.push({
+    role: 'user',
+    content: [
+      { type: 'text', text: prompt },
+      ...imageContent
+    ]
+  });
+
+  console.log('GPT-4o Vision request:', { 
+    imagesCount: imageUrls.length,
+    promptLength: prompt.length 
+  });
+
+  const response = await fetch(`${OPENAI_API_URL}/chat/completions`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${apiKey}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      model: 'gpt-4o',
+      messages,
+      max_tokens: options.max_tokens || 2000,
+      temperature: options.temperature ?? 0.5
+    })
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('GPT-4o Vision error:', response.status, errorText);
+    throw new Error(`Vision API error (${response.status}): ${errorText.substring(0, 200)}`);
+  }
+
+  const data = await response.json();
+  console.log('GPT-4o Vision success, tokens:', data.usage?.total_tokens);
+  
+  return data.choices[0]?.message?.content || '';
+}
+
+/**
+ * Analyze video frames for Instagram Reels optimization
+ * Expects frames from: start (hook), middle, end (CTA)
+ */
+export async function analyzeVideoFrames(
+  apiKey: string,
+  frames: {
+    hookFrames: string[];    // First 3 seconds frames (base64 or URLs)
+    middleFrames: string[];  // Middle section frames
+    endFrames: string[];     // Last 3 seconds frames
+  },
+  context: {
+    duration?: number;
+    transcript?: string;
+    niche?: string;
+  } = {}
+): Promise<{
+  visual_analysis: {
+    hook: {
+      score: number;
+      description: string;
+      strengths: string[];
+      weaknesses: string[];
+      has_face: boolean;
+      has_text_overlay: boolean;
+      attention_grabbing: boolean;
+    };
+    content: {
+      score: number;
+      description: string;
+      visual_quality: string;
+      pacing: string;
+      consistency: boolean;
+    };
+    cta: {
+      score: number;
+      description: string;
+      visible_cta: boolean;
+      cta_type?: string;
+    };
+  };
+  overall_visual_score: number;
+  recommendations: Array<{
+    category: string;
+    issue: string;
+    suggestion: string;
+    priority: 'high' | 'medium' | 'low';
+  }>;
+}> {
+  const allFrames = [
+    ...frames.hookFrames,
+    ...frames.middleFrames,
+    ...frames.endFrames
+  ].slice(0, 8); // Max 8 frames to avoid token limits
+
+  const systemPrompt = `Ты — эксперт по визуальному анализу Instagram Reels с опытом 10,000+ проанализированных видео.
+
+ЗАДАЧА: Проанализировать кадры видео и оценить визуальное качество для виральности.
+
+КОНТЕКСТ:
+- Длительность видео: ${context.duration || 'неизвестно'} секунд
+- Ниша: ${context.niche || 'не указана'}
+${context.transcript ? `- Транскрипт: ${context.transcript.substring(0, 500)}...` : ''}
+
+КАДРЫ:
+- Первые ${frames.hookFrames.length} кадров — ХУК (первые 3 сек)
+- Следующие ${frames.middleFrames.length} кадров — СЕРЕДИНА
+- Последние ${frames.endFrames.length} кадров — ФИНАЛ/CTA
+
+ОЦЕНИ:
+1. ХУК (0-100): Останавливает ли скролл? Есть лицо? Текст на экране? Эмоция?
+2. КОНТЕНТ (0-100): Качество картинки, динамика, согласованность
+3. CTA (0-100): Визуальный призыв к действию в конце
+
+ФОРМАТ ОТВЕТА (JSON):
+{
+  "visual_analysis": {
+    "hook": {
+      "score": 75,
+      "description": "Описание визуального хука",
+      "strengths": ["Сильная сторона 1"],
+      "weaknesses": ["Слабая сторона 1"],
+      "has_face": true,
+      "has_text_overlay": true,
+      "attention_grabbing": true
+    },
+    "content": {
+      "score": 70,
+      "description": "Описание визуального контента",
+      "visual_quality": "high | medium | low",
+      "pacing": "fast | medium | slow",
+      "consistency": true
+    },
+    "cta": {
+      "score": 60,
+      "description": "Описание визуального CTA",
+      "visible_cta": true,
+      "cta_type": "text | gesture | none"
+    }
+  },
+  "overall_visual_score": 68,
+  "recommendations": [
+    {
+      "category": "hook | content | cta | technical",
+      "issue": "Описание проблемы",
+      "suggestion": "Конкретная рекомендация",
+      "priority": "high"
+    }
+  ]
+}`;
+
+  const response = await analyzeWithVision(
+    apiKey,
+    allFrames,
+    'Проанализируй эти кадры видео для Instagram Reels. Верни анализ в JSON формате.',
+    {
+      systemPrompt,
+      detail: 'high',
+      max_tokens: 2000,
+      temperature: 0.3
+    }
+  );
+
+  try {
+    // Extract JSON from response (might be wrapped in markdown)
+    const jsonMatch = response.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      return JSON.parse(jsonMatch[0]);
+    }
+    return JSON.parse(response);
+  } catch (error) {
+    console.error('Failed to parse vision analysis:', response);
+    return {
+      visual_analysis: {
+        hook: {
+          score: 50,
+          description: 'Не удалось проанализировать',
+          strengths: [],
+          weaknesses: [],
+          has_face: false,
+          has_text_overlay: false,
+          attention_grabbing: false
+        },
+        content: {
+          score: 50,
+          description: 'Не удалось проанализировать',
+          visual_quality: 'medium',
+          pacing: 'medium',
+          consistency: true
+        },
+        cta: {
+          score: 50,
+          description: 'Не удалось проанализировать',
+          visible_cta: false
+        }
+      },
+      overall_visual_score: 50,
+      recommendations: []
+    };
+  }
+}
 
 interface ChatMessage {
   role: 'system' | 'user' | 'assistant';

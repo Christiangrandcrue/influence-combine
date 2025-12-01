@@ -13,6 +13,13 @@
     }
   ],
 
+  "r2_buckets": [
+    {
+      "binding": "R2",
+      "bucket_name": "influence-videos"
+    }
+  ],
+
   "vars": {
     "APP_NAME": "Influence Combine",
     "APP_VERSION": "1.0.0"

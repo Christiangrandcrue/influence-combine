@@ -215,6 +215,7 @@ export interface SceneScript {
 // Cloudflare Bindings
 export interface Bindings {
   DB: D1Database;
+  R2: R2Bucket;
   OPENAI_API_KEY?: string;
   SENDGRID_API_KEY?: string;
   APIFY_API_TOKEN?: string;

@@ -780,4 +780,35 @@ ER: ${channelData.engagement_rate?.toFixed(2) || '?'}%
   }
 });
 
+// Delete channel
+channel.delete('/:id', async (c) => {
+  try {
+    const user = c.get('user');
+    if (!user) {
+      return c.json({ success: false, error: 'Не авторизован' }, 401);
+    }
+
+    const channelId = c.req.param('id');
+
+    // Verify ownership
+    const channelData = await c.env.DB.prepare(
+      'SELECT * FROM channels WHERE id = ? AND user_id = ?'
+    ).bind(channelId, user.id).first();
+
+    if (!channelData) {
+      return c.json({ success: false, error: 'Канал не найден' }, 404);
+    }
+
+    // Delete related data
+    await c.env.DB.prepare('DELETE FROM predictions WHERE channel_id = ?').bind(channelId).run();
+    await c.env.DB.prepare('DELETE FROM reels WHERE channel_id = ?').bind(channelId).run();
+    await c.env.DB.prepare('DELETE FROM channels WHERE id = ?').bind(channelId).run();
+
+    return c.json({ success: true, message: 'Канал удалён' });
+  } catch (error: any) {
+    console.error('Delete channel error:', error);
+    return c.json({ success: false, error: 'Ошибка удаления канала' }, 500);
+  }
+});
+
 export default channel;
