@@ -424,11 +424,17 @@ studio.post('/avatar/generate', async (c) => {
       SELECT talking_photo_id FROM users WHERE id = ?
     `).bind(user.id).first<{ talking_photo_id: string | null }>();
 
+    // Detect language and pick appropriate voice
+    const isRussianText = /[а-яА-ЯёЁ]/.test(body.text);
+    const defaultVoiceId = isRussianText 
+      ? '5f99970adadb42398bf1aeb963a3888b' // Dmitry (Russian)
+      : '1bd001e7e50f421d891986aad5158bc8'; // Paul (English)
+
     const videoId = await heygen.createAvatarVideo(apiKey, {
       text: body.text,
       avatarId: body.use_custom_avatar ? undefined : (body.avatar_id || 'Daisy-inskirt-20220818'),
       talkingPhotoId: body.use_custom_avatar ? userData?.talking_photo_id || undefined : undefined,
-      voiceId: body.voice_id || 'en-US-JennyNeural', // Default English voice
+      voiceId: body.voice_id || defaultVoiceId,
       aspectRatio: body.aspect_ratio || '9:16',
       background: body.background_color ? { type: 'color', value: body.background_color } : undefined,
       test: body.test ?? false

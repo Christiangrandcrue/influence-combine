@@ -2445,6 +2445,24 @@ function showAvatarModal() {
           <textarea id="avatarText" rows="4" placeholder="Привет! Это видео создано с помощью AI-аватара..." class="w-full px-4 py-3 rounded-xl bg-slate-800 border border-white/10 focus:border-green-500 focus:outline-none resize-none"></textarea>
         </div>
         
+        <!-- Voice Selection -->
+        <div>
+          <label class="block text-sm font-medium text-slate-300 mb-2">Голос</label>
+          <select id="avatarVoice" class="w-full px-4 py-3 rounded-xl bg-slate-800 border border-white/10 focus:outline-none">
+            <option value="">Автоматически (по языку текста)</option>
+            <optgroup label="Русский">
+              <option value="5f99970adadb42398bf1aeb963a3888b">Dmitry (мужской)</option>
+              <option value="c458964dc4264b70a867b2ebcf36b51e">Andrei (мужской)</option>
+              <option value="aa28b796ef284c5a80497034afe9d93e">Nadia (женский)</option>
+              <option value="70856236390f4d0392d00187143d3900">Larisa (женский)</option>
+            </optgroup>
+            <optgroup label="English">
+              <option value="1bd001e7e50f421d891986aad5158bc8">Paul (male)</option>
+              <option value="001e4a7c5f364f8baf39d15c68f6c0a0">Sara (female)</option>
+            </optgroup>
+          </select>
+        </div>
+        
         <!-- Settings -->
         <div class="grid grid-cols-2 gap-4">
           <div>
@@ -2587,11 +2605,13 @@ async function generateAvatarVideo() {
     }
     
     // Generate video
+    const voiceId = document.getElementById('avatarVoice').value || null;
     const result = await api('/studio/avatar/generate', {
       method: 'POST',
       body: JSON.stringify({
         text,
         avatar_id: selectedAvatarId,
+        voice_id: voiceId,
         aspect_ratio: document.getElementById('avatarAspect').value,
         background_color: document.getElementById('avatarBg').value,
         use_custom_avatar: !!avatarPhotoFile,

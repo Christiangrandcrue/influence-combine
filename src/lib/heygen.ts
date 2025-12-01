@@ -152,6 +152,8 @@ export async function generateVideo(
   apiKey: string,
   request: VideoGenerateRequest
 ): Promise<string> {
+  console.log('HeyGen request:', JSON.stringify(request, null, 2));
+  
   const response = await fetch(`${HEYGEN_API_URL}/video/generate`, {
     method: 'POST',
     headers: {
@@ -161,14 +163,23 @@ export async function generateVideo(
     body: JSON.stringify(request)
   });
 
+  const responseText = await response.text();
+  console.log('HeyGen response status:', response.status);
+  console.log('HeyGen response:', responseText);
+
   if (!response.ok) {
-    const error = await response.text();
-    throw new Error(`Video generation failed: ${error}`);
+    throw new Error(`Video generation failed (${response.status}): ${responseText}`);
   }
 
-  const data = await response.json() as VideoGenerateResponse;
+  let data: VideoGenerateResponse;
+  try {
+    data = JSON.parse(responseText) as VideoGenerateResponse;
+  } catch (e) {
+    throw new Error(`Invalid HeyGen response: ${responseText}`);
+  }
+  
   if (data.error) {
-    throw new Error(data.error);
+    throw new Error(`HeyGen error: ${data.error}`);
   }
 
   return data.data.video_id;
