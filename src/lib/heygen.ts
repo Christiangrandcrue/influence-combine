@@ -246,6 +246,17 @@ export async function createAvatarVideo(
         talking_style: 'expressive'
       };
 
+  // Convert aspect ratio to dimensions
+  // Note: Creator plan ($29/mo) supports up to 1080p
+  // Using 720p for 9:16 to avoid resolution errors
+  const dimensions = {
+    '16:9': { width: 1280, height: 720 },  // 720p HD
+    '9:16': { width: 720, height: 1280 },   // 720p vertical
+    '1:1': { width: 720, height: 720 }      // 720p square
+  };
+  const aspectRatio = options.aspectRatio || '9:16';
+  const dimension = dimensions[aspectRatio];
+
   const request: VideoGenerateRequest = {
     video_inputs: [
       {
@@ -262,7 +273,7 @@ export async function createAvatarVideo(
         }
       }
     ],
-    aspect_ratio: options.aspectRatio || '9:16',
+    dimension,
     test: options.test ?? false
   };
 
