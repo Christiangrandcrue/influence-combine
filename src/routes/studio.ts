@@ -430,15 +430,28 @@ studio.post('/avatar/generate', async (c) => {
       ? '5f99970adadb42398bf1aeb963a3888b' // Dmitry (Russian)
       : '1bd001e7e50f421d891986aad5158bc8'; // Paul (English)
 
-    const videoId = await heygen.createAvatarVideo(apiKey, {
-      text: body.text,
-      avatarId: body.use_custom_avatar ? undefined : (body.avatar_id || 'Daisy-inskirt-20220818'),
-      talkingPhotoId: body.use_custom_avatar ? userData?.talking_photo_id || undefined : undefined,
-      voiceId: body.voice_id || defaultVoiceId,
-      aspectRatio: body.aspect_ratio || '9:16',
-      background: body.background_color ? { type: 'color', value: body.background_color } : undefined,
-      test: body.test ?? false
-    });
+    let videoId: string;
+    try {
+      videoId = await heygen.createAvatarVideo(apiKey, {
+        text: body.text,
+        avatarId: body.use_custom_avatar ? undefined : (body.avatar_id || 'Daisy-inskirt-20220818'),
+        talkingPhotoId: body.use_custom_avatar ? userData?.talking_photo_id || undefined : undefined,
+        voiceId: body.voice_id || defaultVoiceId,
+        aspectRatio: body.aspect_ratio || '9:16',
+        background: body.background_color ? { type: 'color', value: body.background_color } : undefined,
+        test: body.test ?? false
+      });
+    } catch (error: any) {
+      // If it's a resolution error, provide helpful message
+      if (error.message.includes('RESOLUTION_NOT_ALLOWED') || error.message.includes('higher plan')) {
+        return c.json({ 
+          success: false, 
+          error: 'HeyGen API требует платный план для генерации видео. Пожалуйста, обновите подписку HeyGen или используйте test mode для демонстрации.',
+          code: 'HEYGEN_PLAN_REQUIRED'
+        }, 402);
+      }
+      throw error;
+    }
 
     // Save job to database
     const jobId = crypto.randomUUID();

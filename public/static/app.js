@@ -2636,7 +2636,12 @@ async function generateAvatarVideo() {
     pollAvatarVideoStatus(result.video_id);
     
   } catch (error) {
-    alert('Ошибка: ' + error.message);
+    // Check if it's a plan limit error
+    if (error.message && error.message.includes('HEYGEN_PLAN_REQUIRED')) {
+      alert('⚠️ HeyGen API требует платный план\n\nДля генерации видео необходимо обновить подписку HeyGen до платного тарифа.\n\nАльтернатива: можно использовать test mode для демонстрации (видео не будет создано реально).');
+    } else {
+      alert('Ошибка: ' + error.message);
+    }
     btn.disabled = false;
     btn.innerHTML = '<i class="fas fa-video mr-2"></i>Создать видео';
   }
