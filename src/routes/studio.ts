@@ -482,6 +482,10 @@ studio.get('/avatar/video/:videoId/status', async (c) => {
 
     // Update job status in database
     if (status.status === 'completed' || status.status === 'failed') {
+      const errorMessage = status.error 
+        ? (typeof status.error === 'string' ? status.error : JSON.stringify(status.error))
+        : null;
+      
       await c.env.DB.prepare(`
         UPDATE studio_jobs SET 
           status = ?,
@@ -492,7 +496,7 @@ studio.get('/avatar/video/:videoId/status', async (c) => {
       `).bind(
         status.status,
         status.video_url || null,
-        status.error || null,
+        errorMessage,
         videoId,
         user.id
       ).run();

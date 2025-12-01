@@ -201,7 +201,8 @@ export async function getVideoStatus(
   apiKey: string,
   videoId: string
 ): Promise<VideoStatusResponse['data']> {
-  const response = await fetch(`${HEYGEN_API_URL}/video_status.get?video_id=${videoId}`, {
+  // Note: video_status uses v1 API, not v2
+  const response = await fetch(`${HEYGEN_API_URL_V1}/video_status.get?video_id=${videoId}`, {
     headers: {
       'X-Api-Key': apiKey
     }
