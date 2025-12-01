@@ -126,6 +126,8 @@ export async function uploadTalkingPhoto(
   const blob = new Blob([imageData], { type: 'image/jpeg' });
   formData.append('file', blob, filename);
 
+  console.log('Uploading talking photo:', filename, 'size:', imageData.byteLength);
+  
   const response = await fetch(`${HEYGEN_API_URL_V1}/talking_photo`, {
     method: 'POST',
     headers: {
@@ -134,12 +136,21 @@ export async function uploadTalkingPhoto(
     body: formData
   });
 
+  const responseText = await response.text();
+  console.log('Talking photo upload response status:', response.status);
+  console.log('Talking photo upload response:', responseText);
+
   if (!response.ok) {
-    const error = await response.text();
-    throw new Error(`Upload talking photo failed: ${error}`);
+    throw new Error(`Upload talking photo failed (${response.status}): ${responseText}`);
   }
 
-  const data = await response.json() as TalkingPhotoUploadResponse;
+  let data: TalkingPhotoUploadResponse;
+  try {
+    data = JSON.parse(responseText) as TalkingPhotoUploadResponse;
+  } catch (e) {
+    throw new Error(`Invalid HeyGen response: ${responseText}`);
+  }
+  
   if (data.error) {
     throw new Error(data.error);
   }

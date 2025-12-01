@@ -2421,21 +2421,15 @@ function showAvatarModal() {
           </div>
         </div>
         
-        <!-- Or upload custom photo -->
+        <!-- Custom photo (coming soon) -->
         <div class="text-center text-slate-500 text-sm">или</div>
         
-        <div>
-          <label class="block text-sm font-medium text-slate-300 mb-2">Загрузи своё фото</label>
-          <div id="photoDropZone" class="border-2 border-dashed border-slate-600 rounded-xl p-4 text-center cursor-pointer hover:border-green-500 transition">
-            <input type="file" id="avatarPhotoInput" accept="image/*" class="hidden" onchange="handleAvatarPhotoSelect(event)">
-            <div id="photoDropContent">
-              <i class="fas fa-portrait text-2xl text-slate-500 mb-1"></i>
-              <p class="text-slate-400 text-sm">Фото лица анфас</p>
-            </div>
-            <div id="photoFileInfo" class="hidden">
-              <i class="fas fa-check-circle text-green-400 text-xl"></i>
-              <p id="photoFileName" class="text-slate-300 text-sm"></p>
-            </div>
+        <div class="opacity-60 pointer-events-none">
+          <label class="block text-sm font-medium text-slate-300 mb-2">Свой аватар (скоро)</label>
+          <div class="border-2 border-dashed border-slate-700 rounded-xl p-4 text-center bg-slate-900/50">
+            <i class="fas fa-portrait text-2xl text-slate-600 mb-1"></i>
+            <p class="text-slate-500 text-sm">Загрузка своего фото — в разработке</p>
+            <p class="text-slate-600 text-xs mt-1">Требует обучения AI-модели (~10 мин)</p>
           </div>
         </div>
         
@@ -2587,24 +2581,8 @@ async function generateAvatarVideo() {
   btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Генерация...';
   
   try {
-    // If custom photo, upload it first
-    if (avatarPhotoFile) {
-      const formData = new FormData();
-      formData.append('photo', avatarPhotoFile);
-      
-      const uploadResponse = await fetch('/api/studio/avatar/upload-photo', {
-        method: 'POST',
-        body: formData,
-        credentials: 'include'
-      });
-      
-      const uploadResult = await uploadResponse.json();
-      if (!uploadResult.success) {
-        throw new Error(uploadResult.error);
-      }
-    }
-    
-    // Generate video
+    // Custom photo feature is disabled (requires training workflow)
+    // Generate video with selected avatar
     const voiceId = document.getElementById('avatarVoice').value || null;
     const result = await api('/studio/avatar/generate', {
       method: 'POST',
@@ -2614,7 +2592,7 @@ async function generateAvatarVideo() {
         voice_id: voiceId,
         aspect_ratio: document.getElementById('avatarAspect').value,
         background_color: document.getElementById('avatarBg').value,
-        use_custom_avatar: !!avatarPhotoFile,
+        use_custom_avatar: false,
         test: false
       })
     });
