@@ -566,6 +566,63 @@ studio.get('/jobs', async (c) => {
   }
 });
 
+// Delete a job
+studio.delete('/jobs/:jobId', async (c) => {
+  try {
+    const user = c.get('user');
+    if (!user) {
+      return c.json({ success: false, error: 'Не авторизован' }, 401);
+    }
+
+    const jobId = c.req.param('jobId');
+
+    // Verify job belongs to user
+    const job = await c.env.DB.prepare(`
+      SELECT id FROM studio_jobs WHERE id = ? AND user_id = ?
+    `).bind(jobId, user.id).first();
+
+    if (!job) {
+      return c.json({ success: false, error: 'Задача не найдена' }, 404);
+    }
+
+    // Delete the job
+    await c.env.DB.prepare(`
+      DELETE FROM studio_jobs WHERE id = ? AND user_id = ?
+    `).bind(jobId, user.id).run();
+
+    return c.json({
+      success: true,
+      message: 'Задача удалена'
+    });
+  } catch (error: any) {
+    console.error('Delete job error:', error);
+    return c.json({ success: false, error: error.message }, 500);
+  }
+});
+
+// Delete all jobs for user
+studio.delete('/jobs', async (c) => {
+  try {
+    const user = c.get('user');
+    if (!user) {
+      return c.json({ success: false, error: 'Не авторизован' }, 401);
+    }
+
+    // Delete all jobs for user
+    await c.env.DB.prepare(`
+      DELETE FROM studio_jobs WHERE user_id = ?
+    `).bind(user.id).run();
+
+    return c.json({
+      success: true,
+      message: 'Все задачи удалены'
+    });
+  } catch (error: any) {
+    console.error('Delete all jobs error:', error);
+    return c.json({ success: false, error: error.message }, 500);
+  }
+});
+
 // Get API quotas
 studio.get('/quota', async (c) => {
   try {

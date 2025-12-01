@@ -1888,9 +1888,14 @@ async function loadStudioPage() {
       <div class="glass-card p-6 rounded-2xl">
         <div class="flex items-center justify-between mb-4">
           <h3 class="text-lg font-semibold">Последние задачи</h3>
-          <button onclick="loadStudioJobs()" class="text-sm text-primary-400 hover:text-primary-300">
-            <i class="fas fa-sync-alt mr-1"></i>Обновить
-          </button>
+          <div class="flex items-center space-x-3">
+            <button onclick="clearAllJobs()" class="text-sm text-red-400 hover:text-red-300">
+              <i class="fas fa-trash-alt mr-1"></i>Очистить все
+            </button>
+            <button onclick="loadStudioJobs()" class="text-sm text-primary-400 hover:text-primary-300">
+              <i class="fas fa-sync-alt mr-1"></i>Обновить
+            </button>
+          </div>
         </div>
         <div id="studioJobsList" class="space-y-3">
           <div class="text-center py-8 text-slate-500">
@@ -1968,7 +1973,7 @@ async function loadStudioJobs() {
             ${job.params?.text ? `<div class="text-xs text-slate-500 mt-1 max-w-sm truncate">${job.params.text}</div>` : ''}
           </div>
         </div>
-        <div class="flex items-center space-x-4">
+        <div class="flex items-center space-x-3">
           <span class="px-3 py-1 rounded-full text-sm ${getJobStatusColor(job.status)}">
             ${job.status === 'processing' ? '<i class="fas fa-spinner fa-spin mr-1"></i>' : ''}
             ${getJobStatusName(job.status)}
@@ -1983,6 +1988,9 @@ async function loadStudioJobs() {
               <i class="fas fa-sync-alt mr-1"></i>Проверить
             </button>
           ` : ''}
+          <button onclick="deleteJob('${job.id}')" class="p-2 rounded-lg text-slate-400 hover:text-red-400 hover:bg-red-500/10 transition" title="Удалить">
+            <i class="fas fa-trash-alt"></i>
+          </button>
         </div>
       </div>
     `).join('');
@@ -2012,6 +2020,28 @@ async function checkAvatarVideoStatus(videoId) {
     }
   } catch (error) {
     console.error('Check status error:', error);
+  }
+}
+
+async function deleteJob(jobId) {
+  if (!confirm('Удалить эту задачу?')) return;
+  
+  try {
+    await api(`/studio/jobs/${jobId}`, { method: 'DELETE' });
+    loadStudioJobs();
+  } catch (error) {
+    alert('Ошибка удаления: ' + error.message);
+  }
+}
+
+async function clearAllJobs() {
+  if (!confirm('Удалить ВСЕ задачи? Это действие нельзя отменить.')) return;
+  
+  try {
+    await api('/studio/jobs', { method: 'DELETE' });
+    loadStudioJobs();
+  } catch (error) {
+    alert('Ошибка удаления: ' + error.message);
   }
 }
 
