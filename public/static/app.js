@@ -1965,10 +1965,12 @@ async function loadStudioJobs() {
           <div>
             <div class="font-medium">${getJobTypeName(job.type)}</div>
             <div class="text-sm text-slate-400">${formatDate(job.created_at)}</div>
+            ${job.params?.text ? `<div class="text-xs text-slate-500 mt-1 max-w-sm truncate">${job.params.text}</div>` : ''}
           </div>
         </div>
         <div class="flex items-center space-x-4">
           <span class="px-3 py-1 rounded-full text-sm ${getJobStatusColor(job.status)}">
+            ${job.status === 'processing' ? '<i class="fas fa-spinner fa-spin mr-1"></i>' : ''}
             ${getJobStatusName(job.status)}
           </span>
           ${job.result_url ? `
@@ -1976,11 +1978,40 @@ async function loadStudioJobs() {
               <i class="fas fa-download mr-1"></i>Скачать
             </a>
           ` : ''}
+          ${job.status === 'processing' && job.type === 'avatar_video' && job.external_id ? `
+            <button onclick="checkAvatarVideoStatus('${job.external_id}')" class="px-3 py-1 rounded-lg bg-blue-500/20 text-blue-400 text-sm hover:bg-blue-500/30">
+              <i class="fas fa-sync-alt mr-1"></i>Проверить
+            </button>
+          ` : ''}
         </div>
       </div>
     `).join('');
+    
+    // Auto-poll processing jobs
+    const processingJobs = result.jobs.filter(j => j.status === 'processing' && j.type === 'avatar_video' && j.external_id);
+    if (processingJobs.length > 0) {
+      // Check after 10 seconds
+      setTimeout(() => {
+        processingJobs.forEach(job => checkAvatarVideoStatus(job.external_id));
+      }, 10000);
+    }
   } catch (error) {
     console.error('Load jobs error:', error);
+  }
+}
+
+async function checkAvatarVideoStatus(videoId) {
+  try {
+    const result = await api(`/studio/avatar/video/${videoId}/status`);
+    
+    if (result.status === 'completed' || result.status === 'failed') {
+      // Reload jobs to show updated status
+      loadStudioJobs();
+    } else {
+      console.log('Video still processing:', videoId, result.status);
+    }
+  } catch (error) {
+    console.error('Check status error:', error);
   }
 }
 

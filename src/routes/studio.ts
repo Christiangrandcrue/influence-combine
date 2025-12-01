@@ -534,6 +534,7 @@ studio.get('/jobs', async (c) => {
       jobs: jobs.results?.map((j: any) => ({
         id: j.id,
         type: j.type,
+        external_id: j.external_id,
         status: j.status,
         result_url: j.result_url,
         error_message: j.error_message,
