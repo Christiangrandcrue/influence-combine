@@ -24,7 +24,7 @@ async function extractFrameFromBlob(videoBlob: Blob, timestamp: number = 0): Pro
 
 // ==================== UPLOAD ENDPOINTS ====================
 
-// Upload video file directly to R2
+// Upload video file - creates record without storing file (frames extracted client-side)
 videos.post('/upload-file', async (c) => {
   try {
     const user = c.get('user');
@@ -43,52 +43,27 @@ videos.post('/upload-file', async (c) => {
     
     const formData = await c.req.formData();
     const file = formData.get('file') as File | null;
+    const filename = formData.get('filename') as string || file?.name || 'video.mp4';
+    const fileSize = file?.size || parseInt(formData.get('fileSize') as string || '0');
+    const duration = parseFloat(formData.get('duration') as string || '0');
     
-    if (!file) {
+    if (!file && !filename) {
       return c.json({ success: false, error: 'Файл не найден' }, 400);
     }
     
-    // Validate file type
-    const allowedTypes = ['video/mp4', 'video/quicktime', 'video/webm', 'video/x-m4v'];
-    if (!allowedTypes.includes(file.type)) {
-      return c.json({ success: false, error: 'Неподдерживаемый формат видео. Используйте MP4, MOV или WebM' }, 400);
-    }
-    
-    // Validate file size (100MB max)
-    const maxSize = 100 * 1024 * 1024;
-    if (file.size > maxSize) {
-      return c.json({ success: false, error: 'Файл слишком большой. Максимум 100MB' }, 400);
-    }
-    
-    // Generate unique filename
-    const ext = file.name.split('.').pop() || 'mp4';
+    // Generate video ID
     const videoId = generateId();
-    const r2Key = `videos/${user.id}/${videoId}.${ext}`;
     
-    // Upload to R2
-    const arrayBuffer = await file.arrayBuffer();
-    await c.env.R2.put(r2Key, arrayBuffer, {
-      httpMetadata: {
-        contentType: file.type
-      },
-      customMetadata: {
-        userId: user.id,
-        originalName: file.name,
-        uploadedAt: new Date().toISOString()
-      }
-    });
-    
-    // Create video record in DB
+    // Create video record in DB (without storing file - frames will be sent separately)
     await c.env.DB.prepare(`
-      INSERT INTO videos (id, user_id, filename, file_url, file_size, status, created_at, updated_at)
+      INSERT INTO videos (id, user_id, filename, file_size, duration_seconds, status, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, 'uploaded', datetime('now'), datetime('now'))
-    `).bind(videoId, user.id, file.name, r2Key, file.size).run();
+    `).bind(videoId, user.id, filename, fileSize, duration || null).run();
     
     return c.json({
       success: true,
       video_id: videoId,
-      file_url: r2Key,
-      message: 'Видео загружено'
+      message: 'Видео зарегистрировано'
     });
   } catch (error: any) {
     console.error('Upload file error:', error);
@@ -141,9 +116,13 @@ videos.post('/upload', async (c) => {
       video_id: videoId,
       message: 'Видео добавлено'
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Upload video error:', error);
-    return c.json({ success: false, error: 'Ошибка сервера' }, 500);
+    return c.json({ 
+      success: false, 
+      error: 'Ошибка сервера',
+      details: error?.message || String(error)
+    }, 500);
   }
 });
 

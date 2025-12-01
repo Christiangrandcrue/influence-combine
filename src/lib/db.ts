@@ -167,15 +167,19 @@ export async function getUserVideos(db: D1Database, userId: string, limit: numbe
 }
 
 export async function updateVideo(db: D1Database, id: string, data: Partial<Video>): Promise<void> {
-  const fields = Object.keys(data)
-    .filter(k => k !== 'id' && k !== 'user_id' && k !== 'created_at')
-    .map(k => `${k} = ?`);
+  // Filter out undefined values and system fields
+  const filteredEntries = Object.entries(data)
+    .filter(([k, v]) => 
+      k !== 'id' && 
+      k !== 'user_id' && 
+      k !== 'created_at' && 
+      v !== undefined
+    );
   
-  if (fields.length === 0) return;
+  if (filteredEntries.length === 0) return;
   
-  const values = Object.entries(data)
-    .filter(([k]) => k !== 'id' && k !== 'user_id' && k !== 'created_at')
-    .map(([_, v]) => v);
+  const fields = filteredEntries.map(([k]) => `${k} = ?`);
+  const values = filteredEntries.map(([_, v]) => v === null ? null : v);
   
   await db.prepare(`
     UPDATE videos SET ${fields.join(', ')}, updated_at = CURRENT_TIMESTAMP WHERE id = ?

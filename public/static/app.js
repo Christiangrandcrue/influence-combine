@@ -1050,24 +1050,23 @@ async function submitVideoForAnalysis(e) {
     // Check if we have a file upload or text description
     if (uploadedVideoFile && extractedFrames.length > 0) {
       // Full video analysis with frames
-      btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Загрузка видео...';
+      btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Регистрация видео...';
       
-      // Upload file to R2
-      const formData = new FormData();
-      formData.append('file', uploadedVideoFile);
+      // Get video duration from preview element
+      const videoPreview = document.getElementById('videoPreview');
+      const videoDuration = videoPreview ? Math.round(videoPreview.duration) : duration;
       
-      const uploadResponse = await fetch('/api/videos/upload-file', {
+      // Register video (without uploading actual file - frames are sent directly)
+      const createResult = await api('/videos/upload', {
         method: 'POST',
-        body: formData,
-        credentials: 'include'
+        body: JSON.stringify({ 
+          filename: uploadedVideoFile.name,
+          duration_seconds: videoDuration,
+          description: description || hook || 'Видео для анализа'
+        })
       });
       
-      const uploadResult = await uploadResponse.json();
-      if (!uploadResult.success) {
-        throw new Error(uploadResult.error || 'Ошибка загрузки');
-      }
-      
-      videoId = uploadResult.video_id;
+      videoId = createResult.video_id;
       
       btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>AI анализирует видео...';
       
@@ -1084,7 +1083,7 @@ async function submitVideoForAnalysis(e) {
           middleFrames,
           endFrames,
           transcript: description || hook,
-          duration,
+          duration: videoDuration,
           topic,
           hashtags
         })
