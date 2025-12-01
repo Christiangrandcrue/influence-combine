@@ -212,6 +212,23 @@ export interface SceneScript {
   editing_tip?: string;
 }
 
+// Studio Job types
+export interface StudioJob {
+  id: string;
+  user_id: string;
+  type: 'dubbing' | 'avatar_video' | 'tts' | 'video_edit';
+  external_id?: string;
+  status: 'pending' | 'processing' | 'completed' | 'failed';
+  progress: number;
+  params?: string;
+  result_url?: string;
+  result_data?: string;
+  error_message?: string;
+  created_at: string;
+  updated_at: string;
+  completed_at?: string;
+}
+
 // Cloudflare Bindings
 export interface Bindings {
   DB: D1Database;
@@ -219,6 +236,9 @@ export interface Bindings {
   OPENAI_API_KEY?: string;
   SENDGRID_API_KEY?: string;
   APIFY_API_TOKEN?: string;
+  ELEVENLABS_API_KEY?: string;
+  HEYGEN_API_KEY?: string;
+  CREATOMATE_API_KEY?: string;
   JWT_SECRET?: string;
   APP_NAME: string;
   APP_VERSION: string;

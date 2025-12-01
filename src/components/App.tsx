@@ -149,7 +149,7 @@ export function renderApp(user?: User | null): string {
   </script>
   
   <!-- Main App Script -->
-  <script src="/static/app.js?v=1.1.0"></script>
+  <script src="/static/app.js?v=1.2.0"></script>
 </body>
 </html>`;
 }
@@ -532,7 +532,12 @@ function renderDashboard(user: User): string {
         </a>
         <a href="#" onclick="navigateTo('videos')" class="nav-item flex items-center space-x-3 px-4 py-3 rounded-xl text-slate-400 hover:bg-white/5 hover:text-white transition">
           <i class="fas fa-video w-5"></i>
-          <span>Видео</span>
+          <span>Анализ</span>
+        </a>
+        <a href="#" onclick="navigateTo('studio')" class="nav-item flex items-center space-x-3 px-4 py-3 rounded-xl text-slate-400 hover:bg-white/5 hover:text-white transition">
+          <i class="fas fa-film w-5"></i>
+          <span>Студия</span>
+          <span class="ml-auto px-2 py-0.5 text-[10px] rounded-full bg-gradient-to-r from-purple-500 to-pink-500">NEW</span>
         </a>
         <a href="#" onclick="navigateTo('assistant')" class="nav-item flex items-center space-x-3 px-4 py-3 rounded-xl text-slate-400 hover:bg-white/5 hover:text-white transition">
           <i class="fas fa-robot w-5"></i>

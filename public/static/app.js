@@ -175,6 +175,7 @@ function navigateTo(page) {
     dashboard: 'Dashboard',
     ideas: 'Генерация идей',
     videos: 'Анализ видео',
+    studio: 'Video Studio',
     assistant: 'AI Ассистент',
     library: 'База знаний',
     settings: 'Настройки'
@@ -204,6 +205,9 @@ async function loadPageContent(page) {
       break;
     case 'videos':
       await loadVideosPage();
+      break;
+    case 'studio':
+      await loadStudioPage();
       break;
     case 'assistant':
       await loadAssistantPage();
@@ -1746,6 +1750,899 @@ function toggleUserMenu() {
 
 function scrollToFeatures() {
   document.getElementById('features')?.scrollIntoView({ behavior: 'smooth' });
+}
+
+// ============ VIDEO STUDIO ============
+let studioVoices = [];
+let studioAvatars = [];
+let studioJobs = [];
+
+async function loadStudioPage() {
+  const container = document.getElementById('pageContent');
+  
+  container.innerHTML = `
+    <div class="space-y-6">
+      <!-- Header -->
+      <div class="flex items-center justify-between">
+        <div>
+          <h2 class="text-2xl font-bold">Video Studio</h2>
+          <p class="text-slate-400 mt-1">AI-инструменты для создания и обработки видео</p>
+        </div>
+        <button onclick="loadStudioQuota()" class="px-4 py-2 rounded-lg bg-slate-800 text-slate-300 hover:bg-slate-700 transition">
+          <i class="fas fa-sync-alt mr-2"></i>Обновить
+        </button>
+      </div>
+      
+      <!-- Quota Info -->
+      <div id="studioQuota" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="glass-card p-4 rounded-xl">
+          <div class="flex items-center space-x-3 mb-2">
+            <div class="w-10 h-10 rounded-lg bg-purple-500/20 flex items-center justify-center">
+              <i class="fas fa-microphone text-purple-400"></i>
+            </div>
+            <div>
+              <div class="font-medium">ElevenLabs</div>
+              <div class="text-sm text-slate-400">Голос и дубляж</div>
+            </div>
+          </div>
+          <div id="elevenLabsQuota" class="text-sm text-slate-500">Загрузка...</div>
+        </div>
+        <div class="glass-card p-4 rounded-xl">
+          <div class="flex items-center space-x-3 mb-2">
+            <div class="w-10 h-10 rounded-lg bg-blue-500/20 flex items-center justify-center">
+              <i class="fas fa-user-circle text-blue-400"></i>
+            </div>
+            <div>
+              <div class="font-medium">HeyGen</div>
+              <div class="text-sm text-slate-400">AI-аватар</div>
+            </div>
+          </div>
+          <div id="heygenQuota" class="text-sm text-slate-500">Загрузка...</div>
+        </div>
+      </div>
+      
+      <!-- Tools Grid -->
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        
+        <!-- Voice Clone -->
+        <div class="glass-card p-6 rounded-2xl hover:border-purple-500/50 transition cursor-pointer" onclick="showVoiceCloneModal()">
+          <div class="w-14 h-14 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center mb-4">
+            <i class="fas fa-clone text-2xl text-white"></i>
+          </div>
+          <h3 class="text-lg font-semibold mb-2">Клонирование голоса</h3>
+          <p class="text-slate-400 text-sm">Создай AI-копию своего голоса из 30сек аудио. Используй для озвучки на любом языке.</p>
+          <div class="mt-4 flex items-center text-purple-400 text-sm">
+            <span>Начать</span>
+            <i class="fas fa-arrow-right ml-2"></i>
+          </div>
+        </div>
+        
+        <!-- Video Dubbing -->
+        <div class="glass-card p-6 rounded-2xl hover:border-blue-500/50 transition cursor-pointer" onclick="showDubbingModal()">
+          <div class="w-14 h-14 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center mb-4">
+            <i class="fas fa-language text-2xl text-white"></i>
+          </div>
+          <h3 class="text-lg font-semibold mb-2">Перевод видео</h3>
+          <p class="text-slate-400 text-sm">Переведи Reels на английский с сохранением твоего голоса. Автоматические субтитры.</p>
+          <div class="mt-4 flex items-center text-blue-400 text-sm">
+            <span>Перевести</span>
+            <i class="fas fa-arrow-right ml-2"></i>
+          </div>
+        </div>
+        
+        <!-- AI Avatar -->
+        <div class="glass-card p-6 rounded-2xl hover:border-green-500/50 transition cursor-pointer" onclick="showAvatarModal()">
+          <div class="w-14 h-14 rounded-xl bg-gradient-to-br from-green-500 to-emerald-500 flex items-center justify-center mb-4">
+            <i class="fas fa-user-astronaut text-2xl text-white"></i>
+          </div>
+          <h3 class="text-lg font-semibold mb-2">AI-аватар</h3>
+          <p class="text-slate-400 text-sm">Создавай видео с AI-аватаром по тексту. Загрузи своё фото для персонального аватара.</p>
+          <div class="mt-4 flex items-center text-green-400 text-sm">
+            <span>Создать</span>
+            <i class="fas fa-arrow-right ml-2"></i>
+          </div>
+        </div>
+        
+        <!-- Text to Speech -->
+        <div class="glass-card p-6 rounded-2xl hover:border-yellow-500/50 transition cursor-pointer" onclick="showTTSModal()">
+          <div class="w-14 h-14 rounded-xl bg-gradient-to-br from-yellow-500 to-orange-500 flex items-center justify-center mb-4">
+            <i class="fas fa-volume-up text-2xl text-white"></i>
+          </div>
+          <h3 class="text-lg font-semibold mb-2">Озвучка текста</h3>
+          <p class="text-slate-400 text-sm">Превращай текст в речь с реалистичными голосами. Используй клон своего голоса.</p>
+          <div class="mt-4 flex items-center text-yellow-400 text-sm">
+            <span>Озвучить</span>
+            <i class="fas fa-arrow-right ml-2"></i>
+          </div>
+        </div>
+        
+        <!-- Coming Soon: Auto-edit -->
+        <div class="glass-card p-6 rounded-2xl opacity-60">
+          <div class="w-14 h-14 rounded-xl bg-slate-700 flex items-center justify-center mb-4">
+            <i class="fas fa-magic text-2xl text-slate-400"></i>
+          </div>
+          <h3 class="text-lg font-semibold mb-2">Автомонтаж</h3>
+          <p class="text-slate-400 text-sm">Автоматический монтаж: вырезание пауз, субтитры, эффекты. Скоро!</p>
+          <div class="mt-4 flex items-center text-slate-500 text-sm">
+            <span>Скоро</span>
+            <i class="fas fa-clock ml-2"></i>
+          </div>
+        </div>
+        
+        <!-- Coming Soon: Podcast to Shorts -->
+        <div class="glass-card p-6 rounded-2xl opacity-60">
+          <div class="w-14 h-14 rounded-xl bg-slate-700 flex items-center justify-center mb-4">
+            <i class="fas fa-cut text-2xl text-slate-400"></i>
+          </div>
+          <h3 class="text-lg font-semibold mb-2">Нарезка в Shorts</h3>
+          <p class="text-slate-400 text-sm">Автоматическая нарезка подкастов в вертикальные Shorts с субтитрами. Скоро!</p>
+          <div class="mt-4 flex items-center text-slate-500 text-sm">
+            <span>Скоро</span>
+            <i class="fas fa-clock ml-2"></i>
+          </div>
+        </div>
+        
+      </div>
+      
+      <!-- Recent Jobs -->
+      <div class="glass-card p-6 rounded-2xl">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="text-lg font-semibold">Последние задачи</h3>
+          <button onclick="loadStudioJobs()" class="text-sm text-primary-400 hover:text-primary-300">
+            <i class="fas fa-sync-alt mr-1"></i>Обновить
+          </button>
+        </div>
+        <div id="studioJobsList" class="space-y-3">
+          <div class="text-center py-8 text-slate-500">
+            <i class="fas fa-inbox text-3xl mb-2"></i>
+            <p>Пока нет задач</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+  
+  // Load data
+  loadStudioQuota();
+  loadStudioJobs();
+}
+
+async function loadStudioQuota() {
+  try {
+    const result = await api('/studio/quota');
+    
+    if (result.quota?.elevenlabs) {
+      const el = result.quota.elevenlabs;
+      document.getElementById('elevenLabsQuota').innerHTML = `
+        <div class="flex items-center justify-between">
+          <span>Символов: ${el.character_count.toLocaleString()} / ${el.character_limit.toLocaleString()}</span>
+          <span class="${el.can_clone_voice ? 'text-green-400' : 'text-red-400'}">
+            ${el.can_clone_voice ? '✓ Клонирование доступно' : '✗ Клонирование недоступно'}
+          </span>
+        </div>
+        <div class="mt-2 h-2 bg-slate-700 rounded-full overflow-hidden">
+          <div class="h-full bg-purple-500 rounded-full" style="width: ${(el.character_count / el.character_limit) * 100}%"></div>
+        </div>
+      `;
+    }
+    
+    if (result.quota?.heygen) {
+      const hg = result.quota.heygen;
+      document.getElementById('heygenQuota').innerHTML = `
+        <span>Кредитов: ${hg.remaining_credits} осталось</span>
+      `;
+    } else {
+      document.getElementById('heygenQuota').innerHTML = `<span class="text-green-400">✓ Подключено</span>`;
+    }
+  } catch (error) {
+    console.error('Load quota error:', error);
+  }
+}
+
+async function loadStudioJobs() {
+  try {
+    const result = await api('/studio/jobs');
+    const container = document.getElementById('studioJobsList');
+    
+    if (!result.jobs || result.jobs.length === 0) {
+      container.innerHTML = `
+        <div class="text-center py-8 text-slate-500">
+          <i class="fas fa-inbox text-3xl mb-2"></i>
+          <p>Пока нет задач</p>
+        </div>
+      `;
+      return;
+    }
+    
+    studioJobs = result.jobs;
+    
+    container.innerHTML = result.jobs.map(job => `
+      <div class="flex items-center justify-between p-4 bg-slate-800/50 rounded-xl">
+        <div class="flex items-center space-x-4">
+          <div class="w-10 h-10 rounded-lg ${getJobTypeColor(job.type)} flex items-center justify-center">
+            <i class="fas ${getJobTypeIcon(job.type)} text-white"></i>
+          </div>
+          <div>
+            <div class="font-medium">${getJobTypeName(job.type)}</div>
+            <div class="text-sm text-slate-400">${formatDate(job.created_at)}</div>
+          </div>
+        </div>
+        <div class="flex items-center space-x-4">
+          <span class="px-3 py-1 rounded-full text-sm ${getJobStatusColor(job.status)}">
+            ${getJobStatusName(job.status)}
+          </span>
+          ${job.result_url ? `
+            <a href="${job.result_url}" target="_blank" class="px-3 py-1 rounded-lg bg-primary-500/20 text-primary-400 text-sm hover:bg-primary-500/30">
+              <i class="fas fa-download mr-1"></i>Скачать
+            </a>
+          ` : ''}
+        </div>
+      </div>
+    `).join('');
+  } catch (error) {
+    console.error('Load jobs error:', error);
+  }
+}
+
+function getJobTypeColor(type) {
+  const colors = {
+    dubbing: 'bg-blue-500',
+    avatar_video: 'bg-green-500',
+    tts: 'bg-yellow-500',
+    video_edit: 'bg-purple-500'
+  };
+  return colors[type] || 'bg-slate-500';
+}
+
+function getJobTypeIcon(type) {
+  const icons = {
+    dubbing: 'fa-language',
+    avatar_video: 'fa-user-astronaut',
+    tts: 'fa-volume-up',
+    video_edit: 'fa-magic'
+  };
+  return icons[type] || 'fa-cog';
+}
+
+function getJobTypeName(type) {
+  const names = {
+    dubbing: 'Перевод видео',
+    avatar_video: 'AI-аватар',
+    tts: 'Озвучка',
+    video_edit: 'Монтаж'
+  };
+  return names[type] || type;
+}
+
+function getJobStatusColor(status) {
+  const colors = {
+    pending: 'bg-slate-500/20 text-slate-400',
+    processing: 'bg-blue-500/20 text-blue-400',
+    completed: 'bg-green-500/20 text-green-400',
+    failed: 'bg-red-500/20 text-red-400'
+  };
+  return colors[status] || 'bg-slate-500/20 text-slate-400';
+}
+
+function getJobStatusName(status) {
+  const names = {
+    pending: 'Ожидает',
+    processing: 'Обработка...',
+    completed: 'Готово',
+    failed: 'Ошибка'
+  };
+  return names[status] || status;
+}
+
+// Voice Clone Modal
+function showVoiceCloneModal() {
+  const modal = document.createElement('div');
+  modal.className = 'fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4';
+  modal.innerHTML = `
+    <div class="glass-card rounded-2xl p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto">
+      <div class="flex items-center justify-between mb-6">
+        <h3 class="text-xl font-bold">Клонирование голоса</h3>
+        <button onclick="this.closest('.fixed').remove()" class="text-slate-400 hover:text-white">
+          <i class="fas fa-times text-xl"></i>
+        </button>
+      </div>
+      
+      <div class="space-y-4">
+        <div class="p-4 bg-purple-500/10 border border-purple-500/20 rounded-xl">
+          <div class="flex items-start space-x-3">
+            <i class="fas fa-info-circle text-purple-400 mt-1"></i>
+            <div class="text-sm">
+              <p class="text-purple-300 font-medium">Как это работает:</p>
+              <p class="text-slate-400 mt-1">Загрузи аудио (30сек - 3мин) с чистой записью голоса. AI создаст клон, который можно использовать для озвучки на любом языке.</p>
+            </div>
+          </div>
+        </div>
+        
+        <div>
+          <label class="block text-sm font-medium text-slate-300 mb-2">Аудио файл</label>
+          <div id="voiceDropZone" class="border-2 border-dashed border-slate-600 rounded-xl p-8 text-center cursor-pointer hover:border-purple-500 transition">
+            <input type="file" id="voiceAudioInput" accept="audio/*" class="hidden" onchange="handleVoiceAudioSelect(event)">
+            <div id="voiceDropContent">
+              <i class="fas fa-microphone text-4xl text-slate-500 mb-3"></i>
+              <p class="text-slate-400">Перетащи аудио или <span class="text-purple-400">выбери файл</span></p>
+              <p class="text-sm text-slate-500 mt-1">MP3, WAV, M4A • 30сек - 3мин</p>
+            </div>
+            <div id="voiceFileInfo" class="hidden">
+              <i class="fas fa-check-circle text-green-400 text-3xl mb-2"></i>
+              <p id="voiceFileName" class="text-slate-300"></p>
+            </div>
+          </div>
+        </div>
+        
+        <div>
+          <label class="block text-sm font-medium text-slate-300 mb-2">Название голоса</label>
+          <input type="text" id="voiceName" placeholder="Мой голос" class="w-full px-4 py-3 rounded-xl bg-slate-800 border border-white/10 focus:border-purple-500 focus:outline-none">
+        </div>
+      </div>
+      
+      <div class="mt-6 flex space-x-3">
+        <button onclick="cloneVoice()" id="cloneVoiceBtn" class="flex-1 py-3 rounded-xl bg-gradient-to-r from-purple-500 to-pink-500 text-white font-semibold hover:opacity-90 transition">
+          <i class="fas fa-clone mr-2"></i>Клонировать голос
+        </button>
+        <button onclick="this.closest('.fixed').remove()" class="px-6 py-3 rounded-xl bg-slate-800 text-slate-300 hover:bg-slate-700 transition">
+          Отмена
+        </button>
+      </div>
+    </div>
+  `;
+  
+  document.body.appendChild(modal);
+  
+  // Setup drop zone
+  const dropZone = document.getElementById('voiceDropZone');
+  dropZone.onclick = () => document.getElementById('voiceAudioInput').click();
+  dropZone.ondragover = (e) => { e.preventDefault(); dropZone.classList.add('border-purple-500'); };
+  dropZone.ondragleave = () => dropZone.classList.remove('border-purple-500');
+  dropZone.ondrop = (e) => {
+    e.preventDefault();
+    dropZone.classList.remove('border-purple-500');
+    if (e.dataTransfer.files[0]) handleVoiceAudioFile(e.dataTransfer.files[0]);
+  };
+}
+
+let voiceAudioFile = null;
+
+function handleVoiceAudioSelect(e) {
+  if (e.target.files[0]) handleVoiceAudioFile(e.target.files[0]);
+}
+
+function handleVoiceAudioFile(file) {
+  if (file.size > 10 * 1024 * 1024) {
+    alert('Файл слишком большой. Максимум 10MB');
+    return;
+  }
+  voiceAudioFile = file;
+  document.getElementById('voiceDropContent').classList.add('hidden');
+  document.getElementById('voiceFileInfo').classList.remove('hidden');
+  document.getElementById('voiceFileName').textContent = file.name;
+}
+
+async function cloneVoice() {
+  if (!voiceAudioFile) {
+    alert('Выбери аудио файл');
+    return;
+  }
+  
+  const btn = document.getElementById('cloneVoiceBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Клонирование...';
+  
+  try {
+    const formData = new FormData();
+    formData.append('audio', voiceAudioFile);
+    formData.append('name', document.getElementById('voiceName').value || 'Мой голос');
+    
+    const response = await fetch('/api/studio/voice/clone', {
+      method: 'POST',
+      body: formData,
+      credentials: 'include'
+    });
+    
+    const result = await response.json();
+    
+    if (result.success) {
+      alert('Голос успешно клонирован! Теперь ты можешь использовать его для озвучки.');
+      document.querySelector('.fixed.z-50')?.remove();
+      loadStudioQuota();
+    } else {
+      throw new Error(result.error);
+    }
+  } catch (error) {
+    alert('Ошибка: ' + error.message);
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fas fa-clone mr-2"></i>Клонировать голос';
+  }
+}
+
+// Dubbing Modal
+function showDubbingModal() {
+  const modal = document.createElement('div');
+  modal.className = 'fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4';
+  modal.innerHTML = `
+    <div class="glass-card rounded-2xl p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto">
+      <div class="flex items-center justify-between mb-6">
+        <h3 class="text-xl font-bold">Перевод видео</h3>
+        <button onclick="this.closest('.fixed').remove()" class="text-slate-400 hover:text-white">
+          <i class="fas fa-times text-xl"></i>
+        </button>
+      </div>
+      
+      <div class="space-y-4">
+        <div class="p-4 bg-blue-500/10 border border-blue-500/20 rounded-xl">
+          <div class="flex items-start space-x-3">
+            <i class="fas fa-magic text-blue-400 mt-1"></i>
+            <div class="text-sm">
+              <p class="text-blue-300 font-medium">AI-перевод с сохранением голоса</p>
+              <p class="text-slate-400 mt-1">Загрузи видео на русском — получи версию на английском с твоим голосом и автоматическими субтитрами.</p>
+            </div>
+          </div>
+        </div>
+        
+        <div>
+          <label class="block text-sm font-medium text-slate-300 mb-2">Видео файл или URL</label>
+          <div id="dubDropZone" class="border-2 border-dashed border-slate-600 rounded-xl p-6 text-center cursor-pointer hover:border-blue-500 transition mb-3">
+            <input type="file" id="dubVideoInput" accept="video/*" class="hidden" onchange="handleDubVideoSelect(event)">
+            <div id="dubDropContent">
+              <i class="fas fa-video text-3xl text-slate-500 mb-2"></i>
+              <p class="text-slate-400 text-sm">Перетащи видео или <span class="text-blue-400">выбери файл</span></p>
+            </div>
+            <div id="dubFileInfo" class="hidden">
+              <i class="fas fa-check-circle text-green-400 text-2xl mb-1"></i>
+              <p id="dubFileName" class="text-slate-300 text-sm"></p>
+            </div>
+          </div>
+          <div class="text-center text-slate-500 text-sm mb-3">или</div>
+          <input type="text" id="dubVideoUrl" placeholder="https://..." class="w-full px-4 py-3 rounded-xl bg-slate-800 border border-white/10 focus:border-blue-500 focus:outline-none">
+        </div>
+        
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="block text-sm font-medium text-slate-300 mb-2">Исходный язык</label>
+            <select id="dubSourceLang" class="w-full px-4 py-3 rounded-xl bg-slate-800 border border-white/10 focus:outline-none">
+              <option value="ru">Русский</option>
+              <option value="en">English</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-slate-300 mb-2">Целевой язык</label>
+            <select id="dubTargetLang" class="w-full px-4 py-3 rounded-xl bg-slate-800 border border-white/10 focus:outline-none">
+              <option value="en">English</option>
+              <option value="ru">Русский</option>
+              <option value="es">Español</option>
+              <option value="de">Deutsch</option>
+              <option value="fr">Français</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      
+      <div class="mt-6 flex space-x-3">
+        <button onclick="startDubbing()" id="startDubBtn" class="flex-1 py-3 rounded-xl bg-gradient-to-r from-blue-500 to-cyan-500 text-white font-semibold hover:opacity-90 transition">
+          <i class="fas fa-language mr-2"></i>Начать перевод
+        </button>
+        <button onclick="this.closest('.fixed').remove()" class="px-6 py-3 rounded-xl bg-slate-800 text-slate-300 hover:bg-slate-700 transition">
+          Отмена
+        </button>
+      </div>
+    </div>
+  `;
+  
+  document.body.appendChild(modal);
+  
+  // Setup drop zone
+  const dropZone = document.getElementById('dubDropZone');
+  dropZone.onclick = () => document.getElementById('dubVideoInput').click();
+  dropZone.ondragover = (e) => { e.preventDefault(); dropZone.classList.add('border-blue-500'); };
+  dropZone.ondragleave = () => dropZone.classList.remove('border-blue-500');
+  dropZone.ondrop = (e) => {
+    e.preventDefault();
+    dropZone.classList.remove('border-blue-500');
+    if (e.dataTransfer.files[0]) handleDubVideoFile(e.dataTransfer.files[0]);
+  };
+}
+
+let dubVideoFile = null;
+
+function handleDubVideoSelect(e) {
+  if (e.target.files[0]) handleDubVideoFile(e.target.files[0]);
+}
+
+function handleDubVideoFile(file) {
+  if (file.size > 100 * 1024 * 1024) {
+    alert('Файл слишком большой. Максимум 100MB');
+    return;
+  }
+  dubVideoFile = file;
+  document.getElementById('dubDropContent').classList.add('hidden');
+  document.getElementById('dubFileInfo').classList.remove('hidden');
+  document.getElementById('dubFileName').textContent = file.name;
+  document.getElementById('dubVideoUrl').value = '';
+}
+
+async function startDubbing() {
+  const videoUrl = document.getElementById('dubVideoUrl').value.trim();
+  
+  if (!dubVideoFile && !videoUrl) {
+    alert('Загрузи видео или введи URL');
+    return;
+  }
+  
+  const btn = document.getElementById('startDubBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Загрузка...';
+  
+  try {
+    const formData = new FormData();
+    if (dubVideoFile) {
+      formData.append('video', dubVideoFile);
+    } else {
+      formData.append('source_url', videoUrl);
+    }
+    formData.append('source_lang', document.getElementById('dubSourceLang').value);
+    formData.append('target_lang', document.getElementById('dubTargetLang').value);
+    
+    const response = await fetch('/api/studio/dub', {
+      method: 'POST',
+      body: formData,
+      credentials: 'include'
+    });
+    
+    const result = await response.json();
+    
+    if (result.success) {
+      alert(`Перевод запущен! Ожидаемое время: ~${Math.ceil(result.expected_duration_sec / 60)} мин. Результат появится в списке задач.`);
+      document.querySelector('.fixed.z-50')?.remove();
+      loadStudioJobs();
+    } else {
+      throw new Error(result.error);
+    }
+  } catch (error) {
+    alert('Ошибка: ' + error.message);
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fas fa-language mr-2"></i>Начать перевод';
+  }
+}
+
+// TTS Modal
+function showTTSModal() {
+  const modal = document.createElement('div');
+  modal.className = 'fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4';
+  modal.innerHTML = `
+    <div class="glass-card rounded-2xl p-6 w-full max-w-lg">
+      <div class="flex items-center justify-between mb-6">
+        <h3 class="text-xl font-bold">Озвучка текста</h3>
+        <button onclick="this.closest('.fixed').remove()" class="text-slate-400 hover:text-white">
+          <i class="fas fa-times text-xl"></i>
+        </button>
+      </div>
+      
+      <div class="space-y-4">
+        <div>
+          <label class="block text-sm font-medium text-slate-300 mb-2">Текст для озвучки</label>
+          <textarea id="ttsText" rows="5" placeholder="Введите текст, который нужно озвучить..." class="w-full px-4 py-3 rounded-xl bg-slate-800 border border-white/10 focus:border-yellow-500 focus:outline-none resize-none"></textarea>
+        </div>
+        
+        <div class="p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-xl text-sm text-yellow-300">
+          <i class="fas fa-lightbulb mr-2"></i>
+          Если ты клонировал свой голос, он будет использован автоматически.
+        </div>
+      </div>
+      
+      <div class="mt-6 flex space-x-3">
+        <button onclick="generateTTS()" id="generateTTSBtn" class="flex-1 py-3 rounded-xl bg-gradient-to-r from-yellow-500 to-orange-500 text-white font-semibold hover:opacity-90 transition">
+          <i class="fas fa-volume-up mr-2"></i>Озвучить
+        </button>
+        <button onclick="this.closest('.fixed').remove()" class="px-6 py-3 rounded-xl bg-slate-800 text-slate-300 hover:bg-slate-700 transition">
+          Отмена
+        </button>
+      </div>
+      
+      <div id="ttsResult" class="hidden mt-4 p-4 bg-slate-800 rounded-xl">
+        <audio id="ttsAudio" controls class="w-full"></audio>
+        <a id="ttsDownload" class="mt-2 inline-block text-sm text-primary-400 hover:text-primary-300">
+          <i class="fas fa-download mr-1"></i>Скачать MP3
+        </a>
+      </div>
+    </div>
+  `;
+  
+  document.body.appendChild(modal);
+}
+
+async function generateTTS() {
+  const text = document.getElementById('ttsText').value.trim();
+  
+  if (!text) {
+    alert('Введи текст для озвучки');
+    return;
+  }
+  
+  const btn = document.getElementById('generateTTSBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Генерация...';
+  
+  try {
+    const response = await fetch('/api/studio/tts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text }),
+      credentials: 'include'
+    });
+    
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error);
+    }
+    
+    const audioBlob = await response.blob();
+    const audioUrl = URL.createObjectURL(audioBlob);
+    
+    document.getElementById('ttsResult').classList.remove('hidden');
+    document.getElementById('ttsAudio').src = audioUrl;
+    document.getElementById('ttsDownload').href = audioUrl;
+    document.getElementById('ttsDownload').download = 'speech.mp3';
+    
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fas fa-volume-up mr-2"></i>Озвучить ещё';
+  } catch (error) {
+    alert('Ошибка: ' + error.message);
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fas fa-volume-up mr-2"></i>Озвучить';
+  }
+}
+
+// Avatar Modal
+function showAvatarModal() {
+  const modal = document.createElement('div');
+  modal.className = 'fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4';
+  modal.innerHTML = `
+    <div class="glass-card rounded-2xl p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+      <div class="flex items-center justify-between mb-6">
+        <h3 class="text-xl font-bold">AI-аватар видео</h3>
+        <button onclick="this.closest('.fixed').remove()" class="text-slate-400 hover:text-white">
+          <i class="fas fa-times text-xl"></i>
+        </button>
+      </div>
+      
+      <div class="space-y-4">
+        <!-- Avatar Selection -->
+        <div>
+          <label class="block text-sm font-medium text-slate-300 mb-2">Выбери аватар</label>
+          <div id="avatarGrid" class="grid grid-cols-4 gap-3 max-h-48 overflow-y-auto p-2">
+            <div class="text-center py-8 col-span-4 text-slate-500">
+              <i class="fas fa-spinner fa-spin text-2xl"></i>
+              <p class="mt-2 text-sm">Загрузка аватаров...</p>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Or upload custom photo -->
+        <div class="text-center text-slate-500 text-sm">или</div>
+        
+        <div>
+          <label class="block text-sm font-medium text-slate-300 mb-2">Загрузи своё фото</label>
+          <div id="photoDropZone" class="border-2 border-dashed border-slate-600 rounded-xl p-4 text-center cursor-pointer hover:border-green-500 transition">
+            <input type="file" id="avatarPhotoInput" accept="image/*" class="hidden" onchange="handleAvatarPhotoSelect(event)">
+            <div id="photoDropContent">
+              <i class="fas fa-portrait text-2xl text-slate-500 mb-1"></i>
+              <p class="text-slate-400 text-sm">Фото лица анфас</p>
+            </div>
+            <div id="photoFileInfo" class="hidden">
+              <i class="fas fa-check-circle text-green-400 text-xl"></i>
+              <p id="photoFileName" class="text-slate-300 text-sm"></p>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Script -->
+        <div>
+          <label class="block text-sm font-medium text-slate-300 mb-2">Текст для аватара</label>
+          <textarea id="avatarText" rows="4" placeholder="Привет! Это видео создано с помощью AI-аватара..." class="w-full px-4 py-3 rounded-xl bg-slate-800 border border-white/10 focus:border-green-500 focus:outline-none resize-none"></textarea>
+        </div>
+        
+        <!-- Settings -->
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="block text-sm font-medium text-slate-300 mb-2">Формат</label>
+            <select id="avatarAspect" class="w-full px-4 py-3 rounded-xl bg-slate-800 border border-white/10 focus:outline-none">
+              <option value="9:16">9:16 (Reels)</option>
+              <option value="16:9">16:9 (YouTube)</option>
+              <option value="1:1">1:1 (Square)</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-slate-300 mb-2">Фон</label>
+            <input type="color" id="avatarBg" value="#1a1a2e" class="w-full h-12 rounded-xl bg-slate-800 border border-white/10 cursor-pointer">
+          </div>
+        </div>
+      </div>
+      
+      <div class="mt-6 flex space-x-3">
+        <button onclick="generateAvatarVideo()" id="generateAvatarBtn" class="flex-1 py-3 rounded-xl bg-gradient-to-r from-green-500 to-emerald-500 text-white font-semibold hover:opacity-90 transition">
+          <i class="fas fa-video mr-2"></i>Создать видео
+        </button>
+        <button onclick="this.closest('.fixed').remove()" class="px-6 py-3 rounded-xl bg-slate-800 text-slate-300 hover:bg-slate-700 transition">
+          Отмена
+        </button>
+      </div>
+    </div>
+  `;
+  
+  document.body.appendChild(modal);
+  
+  // Setup photo drop zone
+  const dropZone = document.getElementById('photoDropZone');
+  dropZone.onclick = () => document.getElementById('avatarPhotoInput').click();
+  
+  // Load avatars
+  loadAvatarsList();
+}
+
+let selectedAvatarId = null;
+let avatarPhotoFile = null;
+
+async function loadAvatarsList() {
+  try {
+    const result = await api('/studio/avatars');
+    studioAvatars = result.avatars || [];
+    
+    const grid = document.getElementById('avatarGrid');
+    grid.innerHTML = studioAvatars.slice(0, 16).map(avatar => `
+      <div onclick="selectAvatar('${avatar.id}')" id="avatar-${avatar.id}" class="cursor-pointer rounded-xl overflow-hidden border-2 border-transparent hover:border-green-500 transition">
+        <img src="${avatar.preview_image}" alt="${avatar.name}" class="w-full aspect-square object-cover">
+      </div>
+    `).join('');
+    
+    // Select first avatar
+    if (studioAvatars.length > 0) {
+      selectAvatar(studioAvatars[0].id);
+    }
+  } catch (error) {
+    console.error('Load avatars error:', error);
+    document.getElementById('avatarGrid').innerHTML = `
+      <div class="col-span-4 text-center text-red-400 py-4">
+        Ошибка загрузки аватаров
+      </div>
+    `;
+  }
+}
+
+function selectAvatar(avatarId) {
+  // Deselect all
+  document.querySelectorAll('#avatarGrid > div').forEach(el => {
+    el.classList.remove('border-green-500');
+    el.classList.add('border-transparent');
+  });
+  
+  // Select this one
+  const el = document.getElementById(`avatar-${avatarId}`);
+  if (el) {
+    el.classList.remove('border-transparent');
+    el.classList.add('border-green-500');
+  }
+  
+  selectedAvatarId = avatarId;
+  avatarPhotoFile = null;
+  
+  // Clear custom photo
+  document.getElementById('photoDropContent').classList.remove('hidden');
+  document.getElementById('photoFileInfo').classList.add('hidden');
+}
+
+function handleAvatarPhotoSelect(e) {
+  if (e.target.files[0]) {
+    avatarPhotoFile = e.target.files[0];
+    selectedAvatarId = null;
+    
+    // Deselect avatars
+    document.querySelectorAll('#avatarGrid > div').forEach(el => {
+      el.classList.remove('border-green-500');
+      el.classList.add('border-transparent');
+    });
+    
+    document.getElementById('photoDropContent').classList.add('hidden');
+    document.getElementById('photoFileInfo').classList.remove('hidden');
+    document.getElementById('photoFileName').textContent = avatarPhotoFile.name;
+  }
+}
+
+async function generateAvatarVideo() {
+  const text = document.getElementById('avatarText').value.trim();
+  
+  if (!text) {
+    alert('Введи текст для аватара');
+    return;
+  }
+  
+  if (!selectedAvatarId && !avatarPhotoFile) {
+    alert('Выбери аватар или загрузи своё фото');
+    return;
+  }
+  
+  const btn = document.getElementById('generateAvatarBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Генерация...';
+  
+  try {
+    // If custom photo, upload it first
+    if (avatarPhotoFile) {
+      const formData = new FormData();
+      formData.append('photo', avatarPhotoFile);
+      
+      const uploadResponse = await fetch('/api/studio/avatar/upload-photo', {
+        method: 'POST',
+        body: formData,
+        credentials: 'include'
+      });
+      
+      const uploadResult = await uploadResponse.json();
+      if (!uploadResult.success) {
+        throw new Error(uploadResult.error);
+      }
+    }
+    
+    // Generate video
+    const result = await api('/studio/avatar/generate', {
+      method: 'POST',
+      body: JSON.stringify({
+        text,
+        avatar_id: selectedAvatarId,
+        aspect_ratio: document.getElementById('avatarAspect').value,
+        background_color: document.getElementById('avatarBg').value,
+        use_custom_avatar: !!avatarPhotoFile,
+        test: false
+      })
+    });
+    
+    alert(`Видео генерируется! ID: ${result.video_id}. Результат появится в списке задач через 1-3 минуты.`);
+    document.querySelector('.fixed.z-50')?.remove();
+    loadStudioJobs();
+    
+    // Start polling for status
+    pollAvatarVideoStatus(result.video_id);
+    
+  } catch (error) {
+    alert('Ошибка: ' + error.message);
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fas fa-video mr-2"></i>Создать видео';
+  }
+}
+
+async function pollAvatarVideoStatus(videoId) {
+  let attempts = 0;
+  const maxAttempts = 60; // 5 minutes max
+  
+  const check = async () => {
+    try {
+      const result = await api(`/studio/avatar/video/${videoId}/status`);
+      
+      if (result.status === 'completed') {
+        // Reload jobs to show result
+        loadStudioJobs();
+        return;
+      }
+      
+      if (result.status === 'failed') {
+        console.error('Avatar video failed:', result.error);
+        loadStudioJobs();
+        return;
+      }
+      
+      attempts++;
+      if (attempts < maxAttempts) {
+        setTimeout(check, 5000); // Check every 5 seconds
+      }
+    } catch (error) {
+      console.error('Poll status error:', error);
+    }
+  };
+  
+  setTimeout(check, 5000);
 }
 
 // ============ CHANNEL PAGE ============

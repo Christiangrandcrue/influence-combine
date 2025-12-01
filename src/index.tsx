@@ -19,6 +19,7 @@ import videosRoutes from './routes/videos';
 import dashboardRoutes from './routes/dashboard';
 import libraryRoutes from './routes/library';
 import channelRoutes from './routes/channel';
+import studioRoutes from './routes/studio';
 
 // Components
 import { renderApp } from './components/App';
@@ -61,6 +62,10 @@ app.route('/api/dashboard', dashboardRoutes);
 // Channel Analytics (auth required)
 app.use('/api/channel/*', authMiddleware);
 app.route('/api/channel', channelRoutes);
+
+// Video Studio (auth required)
+app.use('/api/studio/*', authMiddleware);
+app.route('/api/studio', studioRoutes);
 
 // Health check
 app.get('/api/health', (c) => {
