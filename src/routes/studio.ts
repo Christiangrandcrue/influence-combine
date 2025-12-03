@@ -623,6 +623,137 @@ studio.delete('/jobs', async (c) => {
   }
 });
 
+// ==================== AUTO-EDIT ====================
+
+// Auto-edit video: remove silence, add subtitles, effects
+studio.post('/auto-edit', async (c) => {
+  try {
+    const user = c.get('user');
+    if (!user) {
+      return c.json({ success: false, error: 'Не авторизован' }, 401);
+    }
+
+    const formData = await c.req.formData();
+    const videoFile = formData.get('video') as File | null;
+    const removeSilence = formData.get('remove_silence') === 'true';
+    const addSubtitles = formData.get('add_subtitles') === 'true';
+    const addEffects = formData.get('add_effects') === 'true';
+    const enhanceAudio = formData.get('enhance_audio') === 'true';
+
+    if (!videoFile) {
+      return c.json({ success: false, error: 'Видео файл обязателен' }, 400);
+    }
+
+    // Validate file size (max 500MB)
+    if (videoFile.size > 500 * 1024 * 1024) {
+      return c.json({ success: false, error: 'Файл слишком большой. Максимум 500MB' }, 400);
+    }
+
+    // Upload video to R2
+    const videoBuffer = await videoFile.arrayBuffer();
+    const videoKey = `studio/auto-edit/${user.id}/${Date.now()}-${videoFile.name}`;
+    await c.env.R2.put(videoKey, videoBuffer, {
+      httpMetadata: { contentType: videoFile.type }
+    });
+
+    // Create job
+    const jobId = crypto.randomUUID();
+    await c.env.DB.prepare(`
+      INSERT INTO studio_jobs (id, user_id, type, status, params, created_at)
+      VALUES (?, ?, 'video_edit', 'pending', ?, datetime('now'))
+    `).bind(
+      jobId,
+      user.id,
+      JSON.stringify({
+        video_key: videoKey,
+        filename: videoFile.name,
+        options: {
+          remove_silence: removeSilence,
+          add_subtitles: addSubtitles,
+          add_effects: addEffects,
+          enhance_audio: enhanceAudio
+        }
+      })
+    ).run();
+
+    return c.json({
+      success: true,
+      job_id: jobId,
+      message: 'Автомонтаж запущен'
+    });
+  } catch (error: any) {
+    console.error('Auto-edit error:', error);
+    return c.json({ success: false, error: error.message }, 500);
+  }
+});
+
+// ==================== PODCAST TO SHORTS ====================
+
+// Convert podcast/long video to shorts
+studio.post('/podcast-shorts', async (c) => {
+  try {
+    const user = c.get('user');
+    if (!user) {
+      return c.json({ success: false, error: 'Не авторизован' }, 401);
+    }
+
+    const formData = await c.req.formData();
+    const videoFile = formData.get('video') as File | null;
+    const clipDuration = parseInt(formData.get('clip_duration') as string || '60');
+    const clipCount = parseInt(formData.get('clip_count') as string || '10');
+    const addSubtitles = formData.get('add_subtitles') === 'true';
+    const addCoverText = formData.get('add_cover_text') === 'true';
+    const autoZoom = formData.get('auto_zoom') === 'true';
+
+    if (!videoFile) {
+      return c.json({ success: false, error: 'Видео файл обязателен' }, 400);
+    }
+
+    // Validate file size (max 2GB)
+    if (videoFile.size > 2000 * 1024 * 1024) {
+      return c.json({ success: false, error: 'Файл слишком большой. Максимум 2GB' }, 400);
+    }
+
+    // Upload video to R2
+    const videoBuffer = await videoFile.arrayBuffer();
+    const videoKey = `studio/podcast-shorts/${user.id}/${Date.now()}-${videoFile.name}`;
+    await c.env.R2.put(videoKey, videoBuffer, {
+      httpMetadata: { contentType: videoFile.type }
+    });
+
+    // Create job
+    const jobId = crypto.randomUUID();
+    await c.env.DB.prepare(`
+      INSERT INTO studio_jobs (id, user_id, type, status, params, created_at)
+      VALUES (?, ?, 'podcast_shorts', 'pending', ?, datetime('now'))
+    `).bind(
+      jobId,
+      user.id,
+      JSON.stringify({
+        video_key: videoKey,
+        filename: videoFile.name,
+        options: {
+          clip_duration: clipDuration,
+          clip_count: clipCount,
+          add_subtitles: addSubtitles,
+          add_cover_text: addCoverText,
+          auto_zoom: autoZoom
+        }
+      })
+    ).run();
+
+    return c.json({
+      success: true,
+      job_id: jobId,
+      clip_count: clipCount,
+      message: `Создаётся ${clipCount} клипов`
+    });
+  } catch (error: any) {
+    console.error('Delete all jobs error:', error);
+    return c.json({ success: false, error: error.message }, 500);
+  }
+});
+
 // Get API quotas
 studio.get('/quota', async (c) => {
   try {

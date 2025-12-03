@@ -149,7 +149,7 @@ export function renderApp(user?: User | null): string {
   </script>
   
   <!-- Main App Script -->
-  <script src="/static/app.js?v=1.2.5"></script>
+  <script src="/static/app.js?v=1.3.0"></script>
 </body>
 </html>`;
 }

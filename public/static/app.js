@@ -1856,29 +1856,29 @@ async function loadStudioPage() {
           </div>
         </div>
         
-        <!-- Coming Soon: Auto-edit -->
-        <div class="glass-card p-6 rounded-2xl opacity-60">
-          <div class="w-14 h-14 rounded-xl bg-slate-700 flex items-center justify-center mb-4">
-            <i class="fas fa-magic text-2xl text-slate-400"></i>
+        <!-- Auto-edit -->
+        <div class="glass-card p-6 rounded-2xl hover:border-purple-500/50 transition cursor-pointer" onclick="showAutoEditModal()">
+          <div class="w-14 h-14 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center mb-4">
+            <i class="fas fa-magic text-2xl text-white"></i>
           </div>
           <h3 class="text-lg font-semibold mb-2">Автомонтаж</h3>
-          <p class="text-slate-400 text-sm">Автоматический монтаж: вырезание пауз, субтитры, эффекты. Скоро!</p>
-          <div class="mt-4 flex items-center text-slate-500 text-sm">
-            <span>Скоро</span>
-            <i class="fas fa-clock ml-2"></i>
+          <p class="text-slate-400 text-sm">Автоматический монтаж: вырезание пауз, субтитры, эффекты.</p>
+          <div class="mt-4 flex items-center text-purple-400 text-sm">
+            <span>Обработать</span>
+            <i class="fas fa-arrow-right ml-2"></i>
           </div>
         </div>
         
-        <!-- Coming Soon: Podcast to Shorts -->
-        <div class="glass-card p-6 rounded-2xl opacity-60">
-          <div class="w-14 h-14 rounded-xl bg-slate-700 flex items-center justify-center mb-4">
-            <i class="fas fa-cut text-2xl text-slate-400"></i>
+        <!-- Podcast to Shorts -->
+        <div class="glass-card p-6 rounded-2xl hover:border-orange-500/50 transition cursor-pointer" onclick="showPodcastShortsModal()">
+          <div class="w-14 h-14 rounded-xl bg-gradient-to-br from-orange-500 to-red-500 flex items-center justify-center mb-4">
+            <i class="fas fa-cut text-2xl text-white"></i>
           </div>
           <h3 class="text-lg font-semibold mb-2">Нарезка в Shorts</h3>
-          <p class="text-slate-400 text-sm">Автоматическая нарезка подкастов в вертикальные Shorts с субтитрами. Скоро!</p>
-          <div class="mt-4 flex items-center text-slate-500 text-sm">
-            <span>Скоро</span>
-            <i class="fas fa-clock ml-2"></i>
+          <p class="text-slate-400 text-sm">Автоматическая нарезка подкастов в вертикальные Shorts с субтитрами.</p>
+          <div class="mt-4 flex items-center text-orange-400 text-sm">
+            <span>Нарезать</span>
+            <i class="fas fa-arrow-right ml-2"></i>
           </div>
         </div>
         
@@ -2050,7 +2050,8 @@ function getJobTypeColor(type) {
     dubbing: 'bg-blue-500',
     avatar_video: 'bg-green-500',
     tts: 'bg-yellow-500',
-    video_edit: 'bg-purple-500'
+    video_edit: 'bg-purple-500',
+    podcast_shorts: 'bg-orange-500'
   };
   return colors[type] || 'bg-slate-500';
 }
@@ -2060,7 +2061,8 @@ function getJobTypeIcon(type) {
     dubbing: 'fa-language',
     avatar_video: 'fa-user-astronaut',
     tts: 'fa-volume-up',
-    video_edit: 'fa-magic'
+    video_edit: 'fa-magic',
+    podcast_shorts: 'fa-cut'
   };
   return icons[type] || 'fa-cog';
 }
@@ -2070,7 +2072,8 @@ function getJobTypeName(type) {
     dubbing: 'Перевод видео',
     avatar_video: 'AI-аватар',
     tts: 'Озвучка',
-    video_edit: 'Монтаж'
+    video_edit: 'Автомонтаж',
+    podcast_shorts: 'Нарезка в Shorts'
   };
   return names[type] || type;
 }
@@ -2707,6 +2710,312 @@ async function pollAvatarVideoStatus(videoId) {
   };
   
   setTimeout(check, 5000);
+}
+
+// ============ AUTO-EDIT MODAL ============
+function showAutoEditModal() {
+  const modal = document.createElement('div');
+  modal.className = 'fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4';
+  modal.innerHTML = `
+    <div class="glass-card rounded-2xl p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+      <div class="flex items-center justify-between mb-6">
+        <h3 class="text-xl font-bold">Автомонтаж видео</h3>
+        <button onclick="this.closest('.fixed').remove()" class="text-slate-400 hover:text-white">
+          <i class="fas fa-times text-xl"></i>
+        </button>
+      </div>
+      
+      <div class="space-y-4">
+        <div class="p-4 bg-purple-500/10 border border-purple-500/20 rounded-xl">
+          <div class="flex items-start space-x-3">
+            <i class="fas fa-magic text-purple-400 mt-1"></i>
+            <div class="text-sm">
+              <p class="text-purple-300 font-medium">AI-автомонтаж</p>
+              <p class="text-slate-400 mt-1">Загрузи видео — получи профессионально отредактированную версию с вырезанными паузами, субтитрами и эффектами.</p>
+            </div>
+          </div>
+        </div>
+        
+        <div>
+          <label class="block text-sm font-medium text-slate-300 mb-2">Видео файл</label>
+          <div id="autoEditDropZone" class="border-2 border-dashed border-slate-600 rounded-xl p-6 text-center cursor-pointer hover:border-purple-500 transition">
+            <input type="file" id="autoEditVideoInput" accept="video/*" class="hidden" onchange="handleAutoEditVideoSelect(event)">
+            <div id="autoEditDropContent">
+              <i class="fas fa-video text-3xl text-slate-500 mb-2"></i>
+              <p class="text-slate-400 text-sm">Перетащи видео или <span class="text-purple-400">выбери файл</span></p>
+              <p class="text-xs text-slate-500 mt-1">MP4, MOV, AVI • До 500MB</p>
+            </div>
+            <div id="autoEditFileInfo" class="hidden">
+              <i class="fas fa-check-circle text-green-400 text-2xl mb-1"></i>
+              <p id="autoEditFileName" class="text-slate-300 text-sm"></p>
+            </div>
+          </div>
+        </div>
+        
+        <div>
+          <label class="block text-sm font-medium text-slate-300 mb-3">Опции обработки</label>
+          <div class="space-y-2">
+            <label class="flex items-center p-3 rounded-lg bg-slate-800/50 hover:bg-slate-800 cursor-pointer transition">
+              <input type="checkbox" id="removeSilence" checked class="w-4 h-4 text-purple-500 rounded focus:ring-purple-500">
+              <span class="ml-3 text-sm">Вырезать паузы и тишину</span>
+            </label>
+            <label class="flex items-center p-3 rounded-lg bg-slate-800/50 hover:bg-slate-800 cursor-pointer transition">
+              <input type="checkbox" id="addSubtitles" checked class="w-4 h-4 text-purple-500 rounded focus:ring-purple-500">
+              <span class="ml-3 text-sm">Добавить автоматические субтитры</span>
+            </label>
+            <label class="flex items-center p-3 rounded-lg bg-slate-800/50 hover:bg-slate-800 cursor-pointer transition">
+              <input type="checkbox" id="addEffects" class="w-4 h-4 text-purple-500 rounded focus:ring-purple-500">
+              <span class="ml-3 text-sm">Добавить визуальные эффекты</span>
+            </label>
+            <label class="flex items-center p-3 rounded-lg bg-slate-800/50 hover:bg-slate-800 cursor-pointer transition">
+              <input type="checkbox" id="enhanceAudio" class="w-4 h-4 text-purple-500 rounded focus:ring-purple-500">
+              <span class="ml-3 text-sm">Улучшить качество звука</span>
+            </label>
+          </div>
+        </div>
+      </div>
+      
+      <div class="mt-6 flex space-x-3">
+        <button onclick="startAutoEdit()" id="autoEditBtn" class="flex-1 py-3 rounded-xl bg-gradient-to-r from-purple-500 to-pink-500 text-white font-semibold hover:opacity-90 transition">
+          <i class="fas fa-magic mr-2"></i>Начать монтаж
+        </button>
+        <button onclick="this.closest('.fixed').remove()" class="px-6 py-3 rounded-xl bg-slate-800 text-slate-300 hover:bg-slate-700 transition">
+          Отмена
+        </button>
+      </div>
+    </div>
+  `;
+  
+  document.body.appendChild(modal);
+  
+  const dropZone = document.getElementById('autoEditDropZone');
+  dropZone.onclick = () => document.getElementById('autoEditVideoInput').click();
+  dropZone.ondragover = (e) => { e.preventDefault(); dropZone.classList.add('border-purple-500'); };
+  dropZone.ondragleave = () => dropZone.classList.remove('border-purple-500');
+  dropZone.ondrop = (e) => {
+    e.preventDefault();
+    dropZone.classList.remove('border-purple-500');
+    if (e.dataTransfer.files[0]) handleAutoEditVideoFile(e.dataTransfer.files[0]);
+  };
+}
+
+let autoEditVideoFile = null;
+
+function handleAutoEditVideoSelect(e) {
+  if (e.target.files[0]) handleAutoEditVideoFile(e.target.files[0]);
+}
+
+function handleAutoEditVideoFile(file) {
+  if (file.size > 500 * 1024 * 1024) {
+    alert('Файл слишком большой. Максимум 500MB');
+    return;
+  }
+  autoEditVideoFile = file;
+  document.getElementById('autoEditDropContent').classList.add('hidden');
+  document.getElementById('autoEditFileInfo').classList.remove('hidden');
+  document.getElementById('autoEditFileName').textContent = file.name;
+}
+
+async function startAutoEdit() {
+  if (!autoEditVideoFile) {
+    alert('Выбери видео файл');
+    return;
+  }
+  
+  const btn = document.getElementById('autoEditBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Загрузка...';
+  
+  try {
+    const formData = new FormData();
+    formData.append('video', autoEditVideoFile);
+    formData.append('remove_silence', document.getElementById('removeSilence').checked);
+    formData.append('add_subtitles', document.getElementById('addSubtitles').checked);
+    formData.append('add_effects', document.getElementById('addEffects').checked);
+    formData.append('enhance_audio', document.getElementById('enhanceAudio').checked);
+    
+    const response = await fetch('/api/studio/auto-edit', {
+      method: 'POST',
+      body: formData,
+      credentials: 'include'
+    });
+    
+    const result = await response.json();
+    
+    if (result.success) {
+      alert(`Автомонтаж запущен! ID: ${result.job_id}\n\nВидео обрабатывается. Результат появится в списке задач через 5-10 минут.`);
+      document.querySelector('.fixed.z-50')?.remove();
+      loadStudioJobs();
+    } else {
+      throw new Error(result.error);
+    }
+  } catch (error) {
+    alert('Ошибка: ' + error.message);
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fas fa-magic mr-2"></i>Начать монтаж';
+  }
+}
+
+// ============ PODCAST TO SHORTS MODAL ============
+function showPodcastShortsModal() {
+  const modal = document.createElement('div');
+  modal.className = 'fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4';
+  modal.innerHTML = `
+    <div class="glass-card rounded-2xl p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+      <div class="flex items-center justify-between mb-6">
+        <h3 class="text-xl font-bold">Нарезка в Shorts</h3>
+        <button onclick="this.closest('.fixed').remove()" class="text-slate-400 hover:text-white">
+          <i class="fas fa-times text-xl"></i>
+        </button>
+      </div>
+      
+      <div class="space-y-4">
+        <div class="p-4 bg-orange-500/10 border border-orange-500/20 rounded-xl">
+          <div class="flex items-start space-x-3">
+            <i class="fas fa-cut text-orange-400 mt-1"></i>
+            <div class="text-sm">
+              <p class="text-orange-300 font-medium">AI-нарезка подкастов</p>
+              <p class="text-slate-400 mt-1">Загрузи длинное видео — получи десятки вирусных Shorts 9:16 с субтитрами.</p>
+            </div>
+          </div>
+        </div>
+        
+        <div>
+          <label class="block text-sm font-medium text-slate-300 mb-2">Видео файл (подкаст, интервью)</label>
+          <div id="shortsDropZone" class="border-2 border-dashed border-slate-600 rounded-xl p-6 text-center cursor-pointer hover:border-orange-500 transition">
+            <input type="file" id="shortsVideoInput" accept="video/*" class="hidden" onchange="handleShortsVideoSelect(event)">
+            <div id="shortsDropContent">
+              <i class="fas fa-video text-3xl text-slate-500 mb-2"></i>
+              <p class="text-slate-400 text-sm">Перетащи видео или <span class="text-orange-400">выбери файл</span></p>
+              <p class="text-xs text-slate-500 mt-1">MP4, MOV • 10 мин - 3 часа</p>
+            </div>
+            <div id="shortsFileInfo" class="hidden">
+              <i class="fas fa-check-circle text-green-400 text-2xl mb-1"></i>
+              <p id="shortsFileName" class="text-slate-300 text-sm"></p>
+            </div>
+          </div>
+        </div>
+        
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="block text-sm font-medium text-slate-300 mb-2">Длина клипов</label>
+            <select id="clipDuration" class="w-full px-4 py-3 rounded-xl bg-slate-800 border border-white/10 focus:outline-none">
+              <option value="30">30 секунд</option>
+              <option value="45">45 секунд</option>
+              <option value="60" selected>60 секунд</option>
+              <option value="90">90 секунд</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-slate-300 mb-2">Количество клипов</label>
+            <select id="clipCount" class="w-full px-4 py-3 rounded-xl bg-slate-800 border border-white/10 focus:outline-none">
+              <option value="5">5 клипов</option>
+              <option value="10" selected>10 клипов</option>
+              <option value="15">15 клипов</option>
+              <option value="20">20 клипов</option>
+            </select>
+          </div>
+        </div>
+        
+        <div>
+          <label class="block text-sm font-medium text-slate-300 mb-3">Настройки</label>
+          <div class="space-y-2">
+            <label class="flex items-center p-3 rounded-lg bg-slate-800/50 hover:bg-slate-800 cursor-pointer transition">
+              <input type="checkbox" id="addShortsSubtitles" checked class="w-4 h-4 text-orange-500 rounded focus:ring-orange-500">
+              <span class="ml-3 text-sm">Добавить анимированные субтитры</span>
+            </label>
+            <label class="flex items-center p-3 rounded-lg bg-slate-800/50 hover:bg-slate-800 cursor-pointer transition">
+              <input type="checkbox" id="addCoverText" checked class="w-4 h-4 text-orange-500 rounded focus:ring-orange-500">
+              <span class="ml-3 text-sm">Добавить текст обложки</span>
+            </label>
+            <label class="flex items-center p-3 rounded-lg bg-slate-800/50 hover:bg-slate-800 cursor-pointer transition">
+              <input type="checkbox" id="autoZoom" class="w-4 h-4 text-orange-500 rounded focus:ring-orange-500">
+              <span class="ml-3 text-sm">Автоматический zoom на спикера</span>
+            </label>
+          </div>
+        </div>
+      </div>
+      
+      <div class="mt-6 flex space-x-3">
+        <button onclick="startPodcastShorts()" id="shortsBtn" class="flex-1 py-3 rounded-xl bg-gradient-to-r from-orange-500 to-red-500 text-white font-semibold hover:opacity-90 transition">
+          <i class="fas fa-cut mr-2"></i>Нарезать клипы
+        </button>
+        <button onclick="this.closest('.fixed').remove()" class="px-6 py-3 rounded-xl bg-slate-800 text-slate-300 hover:bg-slate-700 transition">
+          Отмена
+        </button>
+      </div>
+    </div>
+  `;
+  
+  document.body.appendChild(modal);
+  
+  const dropZone = document.getElementById('shortsDropZone');
+  dropZone.onclick = () => document.getElementById('shortsVideoInput').click();
+  dropZone.ondragover = (e) => { e.preventDefault(); dropZone.classList.add('border-orange-500'); };
+  dropZone.ondragleave = () => dropZone.classList.remove('border-orange-500');
+  dropZone.ondrop = (e) => {
+    e.preventDefault();
+    dropZone.classList.remove('border-orange-500');
+    if (e.dataTransfer.files[0]) handleShortsVideoFile(e.dataTransfer.files[0]);
+  };
+}
+
+let shortsVideoFile = null;
+
+function handleShortsVideoSelect(e) {
+  if (e.target.files[0]) handleShortsVideoFile(e.target.files[0]);
+}
+
+function handleShortsVideoFile(file) {
+  if (file.size > 2000 * 1024 * 1024) {
+    alert('Файл слишком большой. Максимум 2GB');
+    return;
+  }
+  shortsVideoFile = file;
+  document.getElementById('shortsDropContent').classList.add('hidden');
+  document.getElementById('shortsFileInfo').classList.remove('hidden');
+  document.getElementById('shortsFileName').textContent = file.name;
+}
+
+async function startPodcastShorts() {
+  if (!shortsVideoFile) {
+    alert('Выбери видео файл');
+    return;
+  }
+  
+  const btn = document.getElementById('shortsBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Загрузка...';
+  
+  try {
+    const formData = new FormData();
+    formData.append('video', shortsVideoFile);
+    formData.append('clip_duration', document.getElementById('clipDuration').value);
+    formData.append('clip_count', document.getElementById('clipCount').value);
+    formData.append('add_subtitles', document.getElementById('addShortsSubtitles').checked);
+    formData.append('add_cover_text', document.getElementById('addCoverText').checked);
+    formData.append('auto_zoom', document.getElementById('autoZoom').checked);
+    
+    const response = await fetch('/api/studio/podcast-shorts', {
+      method: 'POST',
+      body: formData,
+      credentials: 'include'
+    });
+    
+    const result = await response.json();
+    
+    if (result.success) {
+      alert(`Нарезка запущена! ID: ${result.job_id}\n\nСоздаётся ${result.clip_count} клипов. Результаты появятся в списке задач через 10-20 минут.`);
+      document.querySelector('.fixed.z-50')?.remove();
+      loadStudioJobs();
+    } else {
+      throw new Error(result.error);
+    }
+  } catch (error) {
+    alert('Ошибка: ' + error.message);
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fas fa-cut mr-2"></i>Нарезать клипы';
+  }
 }
 
 // ============ CHANNEL PAGE ============
